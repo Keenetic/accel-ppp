@@ -32,12 +32,19 @@ ENDIF (RADIUS)
 
 
 ADD_SUBDIRECTORY(triton)
+
+IF (VLANMON)
 ADD_SUBDIRECTORY(vlan-mon)
+ENDIF (VLANMON)
+
 ADD_SUBDIRECTORY(ctrl)
 ADD_SUBDIRECTORY(auth)
 ADD_SUBDIRECTORY(logs)
 ADD_SUBDIRECTORY(extra)
+
+IF (IPV6)
 ADD_SUBDIRECTORY(ipv6)
+ENDIF (IPV6)
 
 IF (NOT DEFINED SHAPER)
 	SET(SHAPER TRUE)
@@ -73,7 +80,7 @@ ADD_EXECUTABLE(accel-pppd
 	ppp/ipcp_opt_wins.c
 	ppp/ipv6cp_opt_intfid.c
 	ppp/ppp_ipv6cp.c
-	ppp/ppp_ccp.c	
+	ppp/ppp_ccp.c
 	ppp/ccp_mppe.c
 
 	cli/std_cmd.c
@@ -81,7 +88,7 @@ ADD_EXECUTABLE(accel-pppd
 	cli/telnet.c
 	cli/tcp.c
 	cli/cli.c
-	
+
 	libnetlink/libnetlink.c
 	libnetlink/iputils.c
 	libnetlink/genl.c
