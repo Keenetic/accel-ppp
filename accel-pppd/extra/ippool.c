@@ -49,8 +49,10 @@ struct ipaddr_t
 static struct ipdb_t ipdb;
 
 static in_addr_t conf_gw_ip_address;
+#ifdef RADIUS
 static int conf_vendor = 0;
 static int conf_attr = 88; // Framed-Pool
+#endif
 static int conf_shuffle;
 
 static int cnt;

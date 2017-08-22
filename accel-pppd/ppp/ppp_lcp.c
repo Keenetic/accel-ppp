@@ -820,7 +820,7 @@ static void lcp_recv(struct ppp_handler_t*h)
 			else
 				if (lcp->fsm.recv_id != lcp->fsm.id)
 					break;
-				ppp_fsm_recv_conf_ack(&lcp->fsm);
+			ppp_fsm_recv_conf_ack(&lcp->fsm);
 			break;
 		case CONFNAK:
 			lcp_recv_conf_nak(lcp, (uint8_t*)(hdr + 1), ntohs(hdr->len) - PPP_HDRLEN);
@@ -834,7 +834,7 @@ static void lcp_recv(struct ppp_handler_t*h)
 			else
 				if (lcp->fsm.recv_id != lcp->fsm.id)
 					break;
-				ppp_fsm_recv_conf_rej(&lcp->fsm);
+			ppp_fsm_recv_conf_rej(&lcp->fsm);
 			break;
 		case TERMREQ:
 			if (conf_ppp_verbose)

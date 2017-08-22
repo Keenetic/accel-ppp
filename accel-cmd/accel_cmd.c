@@ -183,7 +183,7 @@ static int accel_talk(int cmdfd, int accelfd, const struct msghdr *mhdr,
 	fd_set rfds;
 	fd_set wfds;
 	ssize_t res;
-	char last_char;
+	char last_char = '\0';
 	int cmdflg = -1;
 	int accelflg = -1;
 	size_t bytes_rd = 0;
