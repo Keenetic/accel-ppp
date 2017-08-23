@@ -27,6 +27,8 @@
 
 #include "memdebug.h"
 
+#define INTERFACE_PREFIX	"l2tp"
+
 int __export conf_ppp_verbose;
 int conf_unit_cache;
 static int conf_unit_preallocate;
@@ -137,6 +139,7 @@ int __export connect_ppp_channel(struct ppp_t *ppp)
 {
 	struct pppunit_cache *uc = NULL;
 	struct ifreq ifr;
+	int s, x, err;
 
 	if (ppp->unit_fd != -1)
 		return 0;
@@ -180,7 +183,23 @@ int __export connect_ppp_channel(struct ppp_t *ppp)
 		goto exit_close_unit;
 	}
 
-	sprintf(ppp->ses.ifname, "ppp%i", ppp->ses.unit_idx);
+	s = socket(PF_INET, SOCK_DGRAM, 0);
+
+	if (s < 0)
+		goto exit_close_unit;
+
+	snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "ppp%d", ppp->ses.unit_idx);
+	snprintf(ifr.ifr_newname, sizeof(ifr.ifr_newname), "%s%d", INTERFACE_PREFIX, ppp->ses.unit_idx);
+	x = ioctl(s, SIOCSIFNAME, &ifr);
+	err = errno;
+	close(s);
+
+	if (x < 0) {
+		log_ppp_error("Couldn't rename %s to %s: %s", ifr.ifr_name, ifr.ifr_newname, strerror(err));
+		goto exit_close_unit;
+	}
+
+	strcpy(ppp->ses.ifname, ifr.ifr_newname);
 
 	log_ppp_info1("connect: %s <--> %s(%s)\n", ppp->ses.ifname, ppp->ses.ctrl->name, ppp->ses.chan_name);
 
