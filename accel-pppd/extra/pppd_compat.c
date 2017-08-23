@@ -29,14 +29,15 @@
 
 #include "memdebug.h"
 
-#define ENV_MEM 1024
-#define ENV_MAX 16
+#define ENV_MEM 2048
+#define ENV_MAX 32
 
 static char *conf_ip_up = "/etc/ppp/ip-up";
 static char *conf_ip_pre_up = "/etc/ppp/ip-pre-up";
 static char *conf_ip_down = "/etc/ppp/ip-down";
 static char *conf_ip_change = "/etc/ppp/ip-change";
 static char *conf_radattr_prefix = "/var/run/radattr";
+static char *conf_map = "";
 static int conf_verbose = 0;
 
 static void *pd_key;
@@ -134,7 +135,7 @@ static void ev_ses_starting(struct ap_session *ses)
 static void ev_ses_pre_up(struct ap_session *ses)
 {
 	pid_t pid;
-	char *argv[8];
+	char *argv[9];
 	char *env[ENV_MAX];
 	char env_mem[ENV_MEM];
 	char ipaddr[17];
@@ -205,7 +206,7 @@ static void ev_ses_pre_up(struct ap_session *ses)
 static void ev_ses_started(struct ap_session *ses)
 {
 	pid_t pid;
-	char *argv[8];
+	char *argv[9];
 	char *env[ENV_MAX];
 	char env_mem[ENV_MEM];
 	char ipaddr[17];
@@ -248,7 +249,7 @@ static void ev_ses_started(struct ap_session *ses)
 static void ev_ses_finished(struct ap_session *ses)
 {
 	pid_t pid;
-	char *argv[8];
+	char *argv[9];
 	char *env[ENV_MAX];
 	char env_mem[ENV_MEM];
 	char ipaddr[17];
@@ -334,7 +335,7 @@ static void ev_radius_access_accept(struct ev_radius_t *ev)
 static void ev_radius_coa(struct ev_radius_t *ev)
 {
 	pid_t pid;
-	char *argv[8];
+	char *argv[9];
 	char *env[ENV_MAX];
 	char env_mem[ENV_MEM];
 	char ipaddr[17];
@@ -509,7 +510,8 @@ static void fill_argv(char **argv, struct pppd_compat_pd *pd, char *path)
 	u_inet_ntoa(pd->ipv4_addr, argv[4]);
 	u_inet_ntoa(pd->ipv4_peer_addr, argv[5]);
 	argv[6] = pd->ses->ctrl->calling_station_id;
-	argv[7] = NULL;
+	argv[7] = conf_map;
+	argv[8] = NULL;
 }
 
 static void build_addr(struct ipv6db_addr_t *a, uint64_t intf_id, struct in6_addr *addr)
@@ -537,6 +539,9 @@ static void fill_env(char **env, char *mem, struct pppd_compat_pd *pd)
 	mem += sprintf(mem, "CALLING_SID=%s", pd->ses->ctrl->calling_station_id) + 1;
 	env[n++] = mem;
 	mem += sprintf(mem, "CALLED_SID=%s", pd->ses->ctrl->called_station_id) + 1;
+
+	env[n++] = mem;
+	mem += sprintf(mem, "MAP=%s", conf_map) + 1;
 
 	if (ses->ipv6) {
 		///FIXME only first address is passed to env
@@ -597,6 +602,10 @@ static void init(void)
 	opt = conf_get_opt("pppd-compat", "verbose");
 	if (opt && atoi(opt) > 0)
 		conf_verbose = 1;
+
+	opt = conf_get_opt("pppd-compat", "map");
+	if (opt)
+		conf_map = _strdup(opt);
 
 	triton_event_register_handler(EV_SES_STARTING, (triton_event_func)ev_ses_starting);
 	triton_event_register_handler(EV_SES_PRE_UP, (triton_event_func)ev_ses_pre_up);
