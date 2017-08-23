@@ -29,14 +29,15 @@
 
 #include "memdebug.h"
 
-#define ENV_MEM 1024
-#define ENV_MAX 16
+#define ENV_MEM 2048
+#define ENV_MAX 32
 
 static char *conf_ip_up;
 static char *conf_ip_pre_up;
 static char *conf_ip_down;
 static char *conf_ip_change;
 static char *conf_radattr_prefix;
+static char *conf_map = "";
 static int conf_verbose = 0;
 static int conf_fork_limit;
 
@@ -204,7 +205,7 @@ static void ev_ses_starting(struct ap_session *ses)
 static void ev_ses_pre_up(struct ap_session *ses)
 {
 	pid_t pid;
-	char *argv[8];
+	char *argv[9];
 	char *env[ENV_MAX];
 	char env_mem[ENV_MEM];
 	char ipaddr[17];
@@ -281,7 +282,7 @@ static void ev_ses_pre_up(struct ap_session *ses)
 static void ev_ses_started(struct ap_session *ses)
 {
 	pid_t pid;
-	char *argv[8];
+	char *argv[9];
 	char *env[ENV_MAX];
 	char env_mem[ENV_MEM];
 	char ipaddr[17];
@@ -328,7 +329,7 @@ static void ev_ses_started(struct ap_session *ses)
 static void ev_ses_finished(struct ap_session *ses)
 {
 	pid_t pid;
-	char *argv[8];
+	char *argv[9];
 	char *env[ENV_MAX];
 	char env_mem[ENV_MEM];
 	char ipaddr[17];
@@ -422,7 +423,7 @@ static void ev_radius_access_accept(struct ev_radius_t *ev)
 static void ev_radius_coa(struct ev_radius_t *ev)
 {
 	pid_t pid;
-	char *argv[8];
+	char *argv[9];
 	char *env[ENV_MAX];
 	char env_mem[ENV_MEM];
 	char ipaddr[17];
@@ -576,7 +577,8 @@ static void fill_argv(char **argv, struct pppd_compat_pd *pd, char *path)
 	u_inet_ntoa(pd->ipv4_addr, argv[4]);
 	u_inet_ntoa(pd->ipv4_peer_addr, argv[5]);
 	argv[6] = pd->ses->ctrl->calling_station_id;
-	argv[7] = NULL;
+	argv[7] = conf_map;
+	argv[8] = NULL;
 }
 
 static void fill_env(char **env, char *mem, struct pppd_compat_pd *pd)
@@ -606,6 +608,15 @@ static void fill_env(char **env, char *mem, struct pppd_compat_pd *pd)
 	env[n] = mem;
 	write_sz = snprintf(mem, mem_sz, "CALLED_SID=%s",
 			    pd->ses->ctrl->called_station_id);
+	if (write_sz < 0 || write_sz >= mem_sz)
+		goto out;
+	mem_sz -= write_sz + 1;
+	mem += write_sz + 1;
+	++n;
+
+	env[n] = mem;
+	write_sz = snprintf(mem, mem_sz, "MAP=%s",
+			    conf_map);
 	if (write_sz < 0 || write_sz >= mem_sz)
 		goto out;
 	mem_sz -= write_sz + 1;
@@ -731,6 +742,10 @@ static void load_config()
 		conf_fork_limit = atoi(opt);
 	else
 		conf_fork_limit = sysconf(_SC_NPROCESSORS_ONLN)*2;
+
+	opt = conf_get_opt("pppd-compat", "map");
+	if (opt)
+		conf_map = _strdup(opt);
 }
 
 static void init(void)
