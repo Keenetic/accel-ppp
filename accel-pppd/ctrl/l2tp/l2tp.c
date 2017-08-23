@@ -4972,6 +4972,7 @@ static void load_config(void)
 	conf_dpv6_pool = conf_get_opt("l2tp", "ipv6-pool-delegate");
 	conf_ifname = conf_get_opt("l2tp", "ifname");
 
+#if 0
 	switch (iprange_check_activation()) {
 	case IPRANGE_DISABLED:
 		log_warn("l2tp: iprange module disabled, improper IP configuration of PPP interfaces may cause kernel soft lockup\n");
@@ -4984,6 +4985,7 @@ static void load_config(void)
 		/* Makes compiler happy */
 		break;
 	}
+#endif
 }
 
 static void l2tp_init(void)
@@ -4993,8 +4995,8 @@ static void l2tp_init(void)
 	fd = socket(AF_PPPOX, SOCK_DGRAM, PX_PROTO_OL2TP);
 	if (fd >= 0)
 		close(fd);
-	else if (system("modprobe -q pppol2tp || modprobe -q l2tp_ppp"))
-		log_warn("unable to load l2tp kernel module\n");
+	else
+		log_warn("unable to use l2tp kernel module\n");
 
 	l2tp_conn = _malloc((UINT16_MAX + 1) * sizeof(struct l2tp_conn_t *));
 	memset(l2tp_conn, 0, (UINT16_MAX + 1) * sizeof(struct l2tp_conn_t *));
