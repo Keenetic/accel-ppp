@@ -656,8 +656,10 @@ static void ipv6cp_recv(struct ppp_handler_t*h)
 	int delay_ack = ipv6cp->delay_ack;
 
 	if (!ipv6cp->starting || ipv6cp->fsm.fsm_state == FSM_Closed || ipv6cp->ppp->ses.terminating || conf_ipv6 == IPV6_DENY) {
+#if 0
 		if (conf_ppp_verbose)
 			log_ppp_warn("IPV6CP: discarding packet\n");
+#endif
 		if (ipv6cp->ppp->ses.terminating)
 			return;
 		if (ipv6cp->fsm.fsm_state == FSM_Closed || conf_ipv6 == IPV6_DENY)
