@@ -133,13 +133,16 @@ static int parse1(const char *str, uint32_t *begin, uint32_t *end)
 	return 0;
 }
 
-//parses ranges like x.x.x.x-y
+//parses ranges like x.x.x.x-y.y.y.y
 static int parse2(const char *str, uint32_t *begin, uint32_t *end)
 {
-	int n, f1, f2, f3, f4, f5;
+	int n, f1, f2, f3, f4;
+	int y1, y2, y3, y4;
 
-	n = sscanf(str, "%u.%u.%u.%u-%u",&f1, &f2, &f3, &f4, &f5);
-	if (n != 5)
+	n = sscanf(str, "%u.%u.%u.%u-%u.%u.%u.%u",
+		&f1, &f2, &f3, &f4, &y1, &y2, &y3, &y4);
+
+	if (n != 8)
 		return -1;
 	if (f1 > 255)
 		return -1;
@@ -149,11 +152,20 @@ static int parse2(const char *str, uint32_t *begin, uint32_t *end)
 		return -1;
 	if (f4 > 255)
 		return -1;
-	if (f5 < f4 || f5 > 255)
+	if (y1 > 255)
+		return -1;
+	if (y2 > 255)
+		return -1;
+	if (y3 > 255)
+		return -1;
+	if (y4 > 255)
 		return -1;
 
-	*begin = (f1 << 24) | (f2 << 16) | (f3 << 8) | f4;
-	*end = (f1 << 24) | (f2 << 16) | (f3 << 8) | f5;
+	*begin = ntohl((f4 << 24) | (f3 << 16) | (f2 << 8) | f1);
+	*end = ntohl((y4 << 24) | (y3 << 16) | (y2 << 8) | y1);
+
+	if (*end < *begin)
+		return -1;
 
 	return 0;
 }
@@ -368,7 +380,7 @@ static void put_ip(struct ap_session *ses, struct ipv4db_item_t *it)
 	struct ippool_item_t *pit = container_of(it, typeof(*pit), it);
 
 	spin_lock(&pit->pool->lock);
-	list_add_tail(&pit->entry, &pit->pool->items);
+	list_add(&pit->entry, &pit->pool->items);
 	spin_unlock(&pit->pool->lock);
 }
 
