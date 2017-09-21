@@ -161,8 +161,13 @@ static int parse2(const char *str, uint32_t *begin, uint32_t *end)
 	if (y4 > 255)
 		return -1;
 
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 	*begin = ntohl((f4 << 24) | (f3 << 16) | (f2 << 8) | f1);
 	*end = ntohl((y4 << 24) | (y3 << 16) | (y2 << 8) | y1);
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+	*begin = ntohl((f1 << 24) | (f2 << 16) | (f3 << 8) | f4);
+	*end = ntohl((y1 << 24) | (y2 << 16) | (y3 << 8) | y4);
+#endif
 
 	if (*end < *begin)
 		return -1;
