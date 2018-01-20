@@ -43,14 +43,22 @@ static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 #ifdef CRYPTO_OPENSSL
+#include <openssl/ssl.h>
+
+#ifdef __GNUC__
+#define IS_NOT_USED __attribute__ ((unused))
+#else
+#define IS_NOT_USED
+#endif
+
 static pthread_mutex_t *ssl_lock_cs;
 
-static unsigned long ssl_thread_id(void)
+static IS_NOT_USED unsigned long ssl_thread_id(void)
 {
 	return (unsigned long)pthread_self();
 }
 
-static void ssl_lock(int mode, int type, const char *file, int line)
+static IS_NOT_USED void ssl_lock(int mode, int type, const char *file, int line)
 {
 	if (mode & CRYPTO_LOCK)
 		pthread_mutex_lock(&ssl_lock_cs[type]);
