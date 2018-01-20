@@ -166,6 +166,7 @@ static void ip_down_handler(struct sigchld_handler_t *h, int status)
 	triton_context_wakeup(pd->ses->ctrl->ctx);
 }
 
+#ifdef RADIUS
 static void ip_change_handler(struct sigchld_handler_t *h, int status)
 {
 	struct pppd_compat_pd *pd = container_of(h, typeof(*pd), hnd);
@@ -181,6 +182,7 @@ static void ip_change_handler(struct sigchld_handler_t *h, int status)
 
 	triton_context_wakeup(pd->ses->ctrl->ctx);
 }
+#endif
 
 static void ev_ses_starting(struct ap_session *ses)
 {
