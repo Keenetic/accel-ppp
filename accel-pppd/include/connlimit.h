@@ -21,6 +21,9 @@ static inline uint64_t cl_key_from_mac(uint8_t hw[6])
 	return key.key;
 }
 
-int connlimit_check(uint64_t key);
+static inline int connlimit_check(uint64_t key)
+{
+	return 0;
+}
 
 #endif

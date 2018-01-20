@@ -11,15 +11,15 @@ project(accel-ppp C)
 SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -fno-strict-aliasing -D_GNU_SOURCE -fPIC -rdynamic -Wno-unused-result")
 
 IF (NOT DEFINED LIB_SUFFIX)
-	EXECUTE_PROCESS(
-		COMMAND uname -m
-		COMMAND tr -d '\n'
-		OUTPUT_VARIABLE ARCH
-	)
-	message(STATUS "'"  ${ARCH}  "'")
-	IF (ARCH STREQUAL x86_64)
-		SET(LIB_SUFFIX 64)
-	ENDIF (ARCH STREQUAL x86_64)
+#	EXECUTE_PROCESS(
+#		COMMAND uname -m
+#		COMMAND tr -d '\n'
+#		OUTPUT_VARIABLE ARCH
+#	)
+#	message(STATUS "'"  ${ARCH}  "'")
+#	IF (ARCH STREQUAL x86_64)
+#		SET(LIB_SUFFIX 64)
+#	ENDIF (ARCH STREQUAL x86_64)
 ENDIF (NOT DEFINED LIB_SUFFIX)
 
 #color console example  message(FATAL_ERROR "${Esc}[31m Red Text ${Esc}[m Restore Normal Text")
