@@ -153,6 +153,15 @@ static struct sstp_serv_t {
 #endif
 } serv;
 
+struct ndm_http_preamble {
+	uint32_t zero;
+	uint32_t packed;
+	uint32_t value;
+
+} __attribute__((packed));
+
+#define NDM_HTTP_PREAMBLE_MARKER_		0x434e444d // {0x43, 'N', 'D', 'M'}
+
 static int conf_timeout = SSTP_NEGOTIOATION_TIMEOUT;
 static int conf_hello_interval = SSTP_HELLO_TIMEOUT;
 static int conf_verbose = 0;
@@ -907,9 +916,34 @@ static int http_handler(struct sstp_conn_t *conn, struct buffer_t *buf)
 	const char **pptr;
 	uint8_t *ptr, *end = NULL;
 	int n;
+	struct ndm_http_preamble ndm_preamble;
+	struct in_addr calling_addr;
 
 	if (conn->sstp_state != STATE_SERVER_CALL_DISCONNECTED)
 		return -1;
+
+	if (*(buf->head) == '\0') {
+		if (buf->len < sizeof(ndm_preamble))
+			return 0;
+
+		memcpy(&ndm_preamble, buf->head, sizeof(ndm_preamble));
+
+		if (ndm_preamble.zero == 0 &&
+			ndm_preamble.packed == htonl(NDM_HTTP_PREAMBLE_MARKER_) &&
+			ndm_preamble.value != 0) {
+
+			calling_addr.s_addr = ndm_preamble.value;
+
+			sprintf(conn->ctrl.calling_station_id, "%s",
+				inet_ntoa(calling_addr));
+
+			if (conf_verbose)
+				log_ppp_info2("recv [HTTP NDM preamble <%s>]\n",
+					conn->ctrl.calling_station_id);
+		}
+
+		buf_pull(buf, sizeof(ndm_preamble));
+	}
 
 	ptr = buf->head;
 	while (ptr < buf->tail && *ptr == ' ')
