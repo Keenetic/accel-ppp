@@ -2045,6 +2045,7 @@ static void load_config(void)
 	conf_ip_pool = conf_get_opt("sstp", "ip-pool");
 	conf_ifname = conf_get_opt("sstp", "ifname");
 
+#if 0
 	switch (iprange_check_activation()) {
 	case IPRANGE_DISABLED:
 		log_warn("sstp: iprange module disabled, improper IP configuration of PPP interfaces may cause kernel soft lockup\n");
@@ -2057,6 +2058,7 @@ static void load_config(void)
 		/* Makes compiler happy */
 		break;
 	}
+#endif
 }
 
 static struct sstp_serv_t serv = {
