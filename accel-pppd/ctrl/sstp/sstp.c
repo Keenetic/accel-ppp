@@ -2844,6 +2844,7 @@ static void load_config(void)
 	if (opt && atoi(opt) > 0)
 		conf_rcvbuf = atoi(opt);
 
+#if 0
 	ipmode = (serv.addr.u.sa.sa_family == AF_INET && !conf_proxyproto) ?
 			iprange_check_activation() : -1;
 	switch (ipmode) {
@@ -2859,6 +2860,7 @@ static void load_config(void)
 		/* Makes compiler happy */
 		break;
 	}
+#endif
 }
 
 static struct sstp_serv_t serv = {
