@@ -2429,6 +2429,7 @@ static void load_config(void)
 	conf_ip_pool = conf_get_opt("sstp", "ip-pool");
 	conf_ifname = conf_get_opt("sstp", "ifname");
 
+#if 0
 	ipmode = (serv.addr.u.sa.sa_family == AF_INET && !conf_proxyproto) ?
 			iprange_check_activation() : -1;
 	switch (ipmode) {
@@ -2444,6 +2445,7 @@ static void load_config(void)
 		/* Makes compiler happy */
 		break;
 	}
+#endif
 }
 
 static struct sstp_serv_t serv = {
