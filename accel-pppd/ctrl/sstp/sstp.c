@@ -202,6 +202,13 @@ static const uint16_t fcstab[256] = {
 	0x7bc7,	0x6a4e,	0x58d5,	0x495c,	0x3de3,	0x2c6a,	0x1ef1,	0x0f78
 };
 
+static void print_buf(const uint8_t *buf, int size)
+{
+	int i;
+	for (i = 0; i < size; i++)
+		log_ppp_info2("%x", buf[i]);
+}
+
 /* buffer */
 
 static inline void *buf_put(struct buffer_t *buf, int len)
@@ -932,9 +939,12 @@ static int sstp_send_msg_call_connect_ack(struct sstp_conn_t *conn)
 	struct buffer_t *buf = alloc_buf(sizeof(*msg));
 
 	if (conf_verbose)
-		log_ppp_info2("send [SSTP SSTP_MSG_CALL_CONNECT_ACK]\n");
+		log_ppp_info2("send [SSTP SSTP_MSG_CALL_CONNECT_ACK");
 
 	if (!buf) {
+		if (conf_verbose)
+			log_ppp_info2("]\n");
+
 		log_error("sstp: no memory\n");
 		return -1;
 	}
@@ -944,8 +954,29 @@ static int sstp_send_msg_call_connect_ack(struct sstp_conn_t *conn)
 	INIT_SSTP_CTRL_HDR(&msg->hdr, SSTP_MSG_CALL_CONNECT_ACK, 1, sizeof(*msg));
 	INIT_SSTP_ATTR_HDR(&msg->attr.hdr, SSTP_ATTRIB_CRYPTO_BINDING_REQ, sizeof(msg->attr));
 	msg->attr.hash_protocol_bitmask = conf_hash_protocol;
-	if (conn->nonce)
+
+	if (conf_verbose) {
+		log_ppp_info2(" <SSTP_ATTRIB_CRYPTO_BINDING_REQ>");
+
+		if (conf_hash_protocol & CERT_HASH_PROTOCOL_SHA1)
+			log_ppp_info2(" <sha1>");
+
+		if (conf_hash_protocol & CERT_HASH_PROTOCOL_SHA256)
+			log_ppp_info2(" <sha256>");
+	}
+
+	if (conn->nonce) {
 		memcpy(msg->attr.nonce, conn->nonce, SSTP_NONCE_SIZE);
+
+		if (conf_verbose) {
+			log_ppp_info2(" <nonce ");
+			print_buf(conn->nonce, SSTP_NONCE_SIZE);
+			log_ppp_info2(">");
+		}
+	}
+
+	if (conf_verbose)
+		log_ppp_info2("]\n");
 
 	return sstp_send(conn, buf);
 }
@@ -960,9 +991,12 @@ static int sstp_send_msg_call_connect_nak(struct sstp_conn_t *conn)
 	struct buffer_t *buf = alloc_buf(sizeof(*msg));
 
 	if (conf_verbose)
-		log_ppp_info2("send [SSTP SSTP_MSG_CALL_CONNECT_NAK]\n");
+		log_ppp_info2("send [SSTP SSTP_MSG_CALL_CONNECT_NAK");
 
 	if (!buf) {
+		if (conf_verbose)
+			log_ppp_info2("]\n");
+
 		log_error("sstp: no memory\n");
 		return -1;
 	}
@@ -974,6 +1008,10 @@ static int sstp_send_msg_call_connect_nak(struct sstp_conn_t *conn)
 	msg->attr.attrib_id = SSTP_ATTRIB_ENCAPSULATED_PROTOCOL_ID;
 	msg->attr.status = htonl(ATTRIB_STATUS_VALUE_NOT_SUPPORTED);
 	msg->attr_value = 0;
+
+	if (conf_verbose) {
+		log_ppp_info2(" <SSTP_ATTRIB_ENCAPSULATED_PROTOCOL_ID> <ATTRIB_STATUS_VALUE_NOT_SUPPORTED>]\n");
+	}
 
 	return sstp_send(conn, buf);
 }
@@ -987,9 +1025,12 @@ static int sstp_send_msg_call_abort(struct sstp_conn_t *conn)
 	struct buffer_t *buf = alloc_buf(sizeof(*msg));
 
 	if (conf_verbose)
-		log_ppp_info2("send [SSTP SSTP_MSG_CALL_ABORT]\n");
+		log_ppp_info2("send [SSTP SSTP_MSG_CALL_ABORT");
 
 	if (!buf) {
+		if (conf_verbose)
+			log_ppp_info2("]\n");
+
 		log_error("sstp: no memory\n");
 		return -1;
 	}
@@ -1000,6 +1041,10 @@ static int sstp_send_msg_call_abort(struct sstp_conn_t *conn)
 	INIT_SSTP_ATTR_HDR(&msg->attr.hdr, SSTP_ATTRIB_STATUS_INFO, sizeof(msg->attr));
 	msg->attr.attrib_id = SSTP_ATTRIB_STATUS_INFO;
 	msg->attr.status = htonl(ATTRIB_STATUS_INVALID_FRAME_RECEIVED);
+
+	if (conf_verbose) {
+		log_ppp_info2(" <SSTP_ATTRIB_STATUS_INFO> <ATTRIB_STATUS_INVALID_FRAME_RECEIVED>]\n");
+	}
 
 	return sstp_send(conn, buf);
 }
@@ -1013,9 +1058,12 @@ static int sstp_send_msg_call_disconnect(struct sstp_conn_t *conn)
 	struct buffer_t *buf = alloc_buf(sizeof(*msg));
 
 	if (conf_verbose)
-		log_ppp_info2("send [SSTP SSTP_MSG_CALL_DISCONNECT]\n");
+		log_ppp_info2("send [SSTP SSTP_MSG_CALL_DISCONNECT");
 
 	if (!buf) {
+		if (conf_verbose)
+			log_ppp_info2("]\n");
+
 		log_error("sstp: no memory\n");
 		return -1;
 	}
@@ -1026,6 +1074,10 @@ static int sstp_send_msg_call_disconnect(struct sstp_conn_t *conn)
 	INIT_SSTP_ATTR_HDR(&msg->attr.hdr, SSTP_ATTRIB_STATUS_INFO, sizeof(msg->attr));
 	msg->attr.attrib_id = SSTP_ATTRIB_NO_ERROR;
 	msg->attr.status = htonl(ATTRIB_STATUS_NO_ERROR);
+
+	if (conf_verbose) {
+		log_ppp_info2(" <SSTP_ATTRIB_NO_ERROR> <ATTRIB_STATUS_NO_ERROR>]\n");
+	}
 
 	return sstp_send(conn, buf);
 }
@@ -1179,45 +1231,94 @@ static int sstp_recv_msg_call_connected(struct sstp_conn_t *conn, struct sstp_ct
 	} __attribute__((packed)) *msg = (void *)hdr;
 
 	if (conf_verbose)
-		log_ppp_info2("recv [SSTP SSTP_MSG_CALL_CONNECTED]\n");
+		log_ppp_info2("recv [SSTP SSTP_MSG_CALL_CONNECTED");
 
 	switch (conn->sstp_state) {
 	case STATE_CALL_ABORT_TIMEOUT_PENDING:
 	case STATE_CALL_ABORT_PENDING:
 	case STATE_CALL_DISCONNECT_ACK_PENDING:
 	case STATE_CALL_DISCONNECT_TIMEOUT_PENDING:
-		return 0;
+		{
+			if (conf_verbose)
+				log_ppp_info2("]\n");
+			return 0;
+		}
 	case STATE_SERVER_CALL_CONNECTED_PENDING:
 		break;
 	default:
-		sstp_abort(conn, 0);
-		return 0;
+		{
+			if (conf_verbose)
+				log_ppp_info2("]\n");
+
+			sstp_abort(conn, 0);
+			return 0;
+		}
 	}
 
 	if (ntohs(msg->hdr.length) < sizeof(*msg) ||
 	    ntohs(msg->hdr.num_attributes) < 1 ||
 	    msg->attr.hdr.attribute_id != SSTP_ATTRIB_CRYPTO_BINDING ||
 	    ntohs(msg->attr.hdr.length) < sizeof(msg->attr)) {
+		if (conf_verbose)
+			log_ppp_info2("]\n");
 		return sstp_abort(conn, 0);
 	}
 
-	if (conn->nonce && memcmp(msg->attr.nonce, conn->nonce, SSTP_NONCE_SIZE) != 0)
+	if (conf_verbose) {
+		log_ppp_info2(" <nonce ");
+		print_buf(msg->attr.nonce, SSTP_NONCE_SIZE);
+		log_ppp_info2(">");
+	}
+
+	if (conn->nonce && memcmp(msg->attr.nonce, conn->nonce, SSTP_NONCE_SIZE) != 0) {
+		if (conf_verbose)
+			log_ppp_info2("]\n");
 		return sstp_abort(conn, 0);
+	}
 
 	switch (msg->attr.hash_protocol_bitmask & conf_hash_protocol) {
 	case CERT_HASH_PROTOCOL_SHA1:
-		if (conf_hash_sha1.len == SHA_DIGEST_LENGTH &&
-		    memcmp(msg->attr.cert_hash, conf_hash_sha1.hash, SHA_DIGEST_LENGTH) != 0)
-			return sstp_abort(conn, 0);
-		break;
+		{
+			if (conf_verbose) {
+				log_ppp_info2(" <sha1 ");
+				print_buf(msg->attr.cert_hash, SHA_DIGEST_LENGTH);
+				log_ppp_info2(">");
+			}
+
+			if (conf_hash_sha1.len == SHA_DIGEST_LENGTH &&
+					memcmp(msg->attr.cert_hash, conf_hash_sha1.hash, SHA_DIGEST_LENGTH) != 0) {
+				if (conf_verbose)
+					log_ppp_info2("]\n");
+				return sstp_abort(conn, 0);
+			}
+			break;
+		}
 	case CERT_HASH_PROTOCOL_SHA256:
-		if (conf_hash_sha256.len == SHA256_DIGEST_LENGTH &&
-		    memcmp(msg->attr.cert_hash, conf_hash_sha256.hash, SHA256_DIGEST_LENGTH) != 0)
-			return sstp_abort(conn, 0);
-		break;
+		{
+			if (conf_verbose) {
+				log_ppp_info2(" <sha256 ");
+				print_buf(msg->attr.cert_hash, SHA256_DIGEST_LENGTH);
+				log_ppp_info2(">");
+			}
+
+			if (conf_hash_sha256.len == SHA256_DIGEST_LENGTH &&
+				memcmp(msg->attr.cert_hash, conf_hash_sha256.hash, SHA256_DIGEST_LENGTH) != 0) {
+				if (conf_verbose)
+					log_ppp_info2("]\n");
+				return sstp_abort(conn, 0);
+			}
+			break;
+		}
 	default:
-		return sstp_abort(conn, 0);
+		{
+			if (conf_verbose)
+				log_ppp_info2(" <invalid>]\n");
+			return sstp_abort(conn, 0);
+		}
 	}
+
+	if (conf_verbose)
+		log_ppp_info2("]\n");
 
 	conn->sstp_state = STATE_SERVER_CALL_CONNECTED;
 
