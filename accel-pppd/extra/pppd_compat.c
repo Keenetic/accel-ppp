@@ -157,6 +157,7 @@ static void ip_down_handler(struct sigchld_handler_t *h, int status)
 {
 	struct pppd_compat_pd *pd = container_of(h, typeof(*pd), hnd);
 
+#if 0
 	fork_queue_wakeup();
 
 	if (conf_verbose) {
@@ -165,6 +166,15 @@ static void ip_down_handler(struct sigchld_handler_t *h, int status)
 	}
 
 	triton_context_wakeup(pd->ses->ctrl->ctx);
+#else
+	if (conf_verbose) {
+		log_switch(NULL, pd->ses);
+		log_ppp_info2("pppd_compat: ip-down finished (%i)\n", status);
+	}
+
+	list_del(&pd->pd.entry);
+	_free(pd);
+#endif
 }
 
 #ifdef RADIUS
@@ -368,10 +378,12 @@ static void ev_ses_finished(struct ap_session *ses)
 				log_ppp_info2("pppd_compat: ip-down started (pid %i)\n", pid);
 			sigchld_unlock();
 
+#if 0
 			triton_context_schedule();
 
 			pthread_mutex_lock(&pd->hnd.lock);
 			pthread_mutex_unlock(&pd->hnd.lock);
+#endif
 		} else if (pid == 0) {
 			sigset_t set;
 			sigfillset(&set);
@@ -401,8 +413,10 @@ static void ev_ses_finished(struct ap_session *ses)
 		remove_radattr(pd);
 #endif
 
+#if 0
 	list_del(&pd->pd.entry);
 	_free(pd);
+#endif
 }
 
 #ifdef RADIUS
