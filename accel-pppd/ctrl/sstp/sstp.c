@@ -13,6 +13,7 @@
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
+#include <sys/un.h>
 #include "linux_ppp.h"
 
 #ifdef CRYPTO_OPENSSL
@@ -151,6 +152,8 @@ static struct hash_t conf_hash_sha1 = { .len = 0 };
 static struct hash_t conf_hash_sha256 = { .len = 0 };
 //static int conf_bypass_auth = 0;
 static const char *conf_hostname = NULL;
+static int conf_fd_uds = -1;
+static const char *conf_sun_path = NULL;
 
 static mempool_t conn_pool;
 
@@ -1742,11 +1745,16 @@ static int sstp_connect(struct triton_md_handler_t *h)
 {
 	struct sstp_conn_t *conn;
 	struct sockaddr_in addr;
+	struct sockaddr_un addr_un;
 	socklen_t size = sizeof(addr);
 	int sock, value;
 
 	while (1) {
-		sock = accept(h->fd, (struct sockaddr *)&addr, &size);
+		if (conf_fd_uds)
+			sock = accept(h->fd, (struct sockaddr *)&addr_un, &size);
+		else
+			sock = accept(h->fd, (struct sockaddr *)&addr, &size);
+
 		if (sock < 0) {
 			if (errno == EAGAIN)
 				return 0;
@@ -1764,8 +1772,10 @@ static int sstp_connect(struct triton_md_handler_t *h)
 			return 0;
 		}
 
-		
-		log_info2("sstp: new connection from %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+		if (conf_fd_uds)
+			log_info2("sstp: new connection from %s\n", addr_un.sun_path);
+		else
+			log_info2("sstp: new connection from %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
 
 		if (iprange_client_check(addr.sin_addr.s_addr)) {
 			log_warn("sstp: IP is out of client-ip-range, droping connection...\n");
@@ -1786,11 +1796,13 @@ static int sstp_connect(struct triton_md_handler_t *h)
 			continue;
 		}
 
-		value = 1;
-		if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &value, sizeof(value)) < 0) {
-			log_error("sstp: failed to disable nagle: %s, closing connection...\n", strerror(errno));
-			close(sock);
-			continue;
+		if (!conf_fd_uds) {
+			value = 1;
+			if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &value, sizeof(value)) < 0) {
+				log_error("sstp: failed to disable nagle: %s, closing connection...\n", strerror(errno));
+				close(sock);
+				continue;
+			}
 		}
 
 		conn = mempool_alloc(conn_pool);
@@ -1832,9 +1844,24 @@ static int sstp_connect(struct triton_md_handler_t *h)
 		conn->ctrl.mppe = MPPE_UNSET;
 		conn->ctrl.calling_station_id = _malloc(sizeof("255.255.255.255:65535"));
 		conn->ctrl.called_station_id = _malloc(sizeof("255.255.255.255"));
+
+		if (conf_fd_uds) {
+			memset(&addr, 0, sizeof(addr));
+			addr.sin_family = AF_INET;
+			addr.sin_addr.s_addr = htonl(0x7F000001);
+			addr.sin_port = rand() % UINT16_MAX;
+		}
+
 		sprintf(conn->ctrl.calling_station_id, "%s:%d",
 			 inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
-		getsockname(sock, &addr, &size);
+
+		if (!conf_fd_uds)
+			getsockname(sock, &addr, &size);
+		else {
+			addr.sin_family = AF_INET;
+			addr.sin_addr.s_addr = htonl(0x7F000001);
+		}
+
 		u_inet_ntoa(addr.sin_addr.s_addr, conn->ctrl.called_station_id);
 
 		ppp_init(&conn->ppp);
@@ -1867,6 +1894,9 @@ static void sstp_serv_close(struct triton_context_t *ctx)
 		SSL_CTX_free(serv->ssl_ctx);
 	serv->ssl_ctx = NULL;
 #endif
+
+	if (conf_sun_path && (conf_fd_uds >= 0))
+		unlink(conf_sun_path);
 }
 
 static int strhas(const char *s1, const char *s2, int delim)
@@ -2104,39 +2134,82 @@ static struct sstp_serv_t serv = {
 static void sstp_init(void)
 {
 	struct sockaddr_in addr;
+	struct sockaddr_un addr_un;
+	int len = 0;
 	char *opt;
 
-	serv.hnd.fd = socket(PF_INET, SOCK_STREAM, 0);
-	if (serv.hnd.fd < 0) {
-		log_emerg("sstp: failed to create server socket: %s\n", strerror(errno));
-		return;
+	opt = conf_get_opt("sstp", "uds-path");
+
+	if (opt) {
+		conf_fd_uds = 1;
+
+		memset(&addr_un, 0, sizeof(addr_un));
+
+		addr_un.sun_family = AF_UNIX;
+
+		len = snprintf(addr_un.sun_path, sizeof(addr_un.sun_path), "%s", opt);
+
+		if (len < 0 || len >= sizeof(addr_un.sun_path)) {
+			log_emerg("sstp: unable to make UDS socket\n");
+			return;
+		} else
+			len += (int)offsetof(struct sockaddr_un, sun_path) + 1;
+
+		if (unlink(addr_un.sun_path)) {
+			const int err = errno;
+
+			if (err != ENOENT) {
+				log_emerg("sstp: unable to unlink UDS socket: %s\n", strerror(err));
+				return;
+			}
+		}
+
+		conf_sun_path = strdup(addr_un.sun_path);
+
+		serv.hnd.fd = socket(PF_UNIX, SOCK_STREAM, 0);
+		if (serv.hnd.fd < 0) {
+			log_emerg("sstp: failed to create server socket: %s\n", strerror(errno));
+			return;
+		}
+
+		if (bind(serv.hnd.fd, (struct sockaddr *) &addr_un, sizeof (addr_un)) < 0) {
+			log_emerg("sstp: failed to bind socket: %s\n", strerror(errno));
+			close(serv.hnd.fd);
+			return;
+		}
+	} else {
+		serv.hnd.fd = socket(PF_INET, SOCK_STREAM, 0);
+		if (serv.hnd.fd < 0) {
+			log_emerg("sstp: failed to create server socket: %s\n", strerror(errno));
+			return;
+		}
+
+		addr.sin_family = AF_INET;
+
+		opt = conf_get_opt("sstp", "bind");
+		if (opt)
+			addr.sin_addr.s_addr = inet_addr(opt);
+		else
+			addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+		opt = conf_get_opt("sstp", "port");
+		if (opt && atoi(opt) > 0)
+			addr.sin_port = htons(atoi(opt));
+		else
+			addr.sin_port = htons(SSTP_PORT);
+
+		setsockopt(serv.hnd.fd, SOL_SOCKET, SO_REUSEADDR, &serv.hnd.fd, 4);
+
+		if (bind(serv.hnd.fd, (struct sockaddr *) &addr, sizeof (addr)) < 0) {
+			log_emerg("sstp: failed to bind socket: %s\n", strerror(errno));
+			close(serv.hnd.fd);
+			return;
+		}
 	}
 
 	fcntl(serv.hnd.fd, F_SETFD, fcntl(serv.hnd.fd, F_GETFD) | FD_CLOEXEC);
 
-	addr.sin_family = AF_INET;
-
-	opt = conf_get_opt("sstp", "bind");
-	if (opt)
-		addr.sin_addr.s_addr = inet_addr(opt);
-	else
-		addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-	opt = conf_get_opt("sstp", "port");
-	if (opt && atoi(opt) > 0)
-		addr.sin_port = htons(atoi(opt));
-	else
-		addr.sin_port = htons(SSTP_PORT);
-
-	setsockopt(serv.hnd.fd, SOL_SOCKET, SO_REUSEADDR, &serv.hnd.fd, 4);
-
-	if (bind(serv.hnd.fd, (struct sockaddr *) &addr, sizeof (addr)) < 0) {
-		log_emerg("sstp: failed to bind socket: %s\n", strerror(errno));
-		close(serv.hnd.fd);
-		return;
-	}
-
-	if (listen(serv.hnd.fd, 100) < 0) {
+	if (listen(serv.hnd.fd, 10) < 0) {
 		log_emerg("sstp: failed to listen socket: %s\n", strerror(errno));
 		close(serv.hnd.fd);
 		return;
