@@ -388,7 +388,7 @@ int main(int _argc, char **_argv)
 	if (pid_file)
 		unlink(pid_file);
 
-	log_msg("accel-ppp stopped\n", ACCEL_PPP_VERSION);
+	log_msg("accel-ppp stopped\n");
 
 	return EXIT_SUCCESS;
 

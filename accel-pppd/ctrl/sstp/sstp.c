@@ -152,7 +152,7 @@ static struct hash_t conf_hash_sha1 = { .len = 0 };
 static struct hash_t conf_hash_sha256 = { .len = 0 };
 //static int conf_bypass_auth = 0;
 static const char *conf_hostname = NULL;
-static int conf_fd_uds = -1;
+static int conf_fd_uds = 0;
 static const char *conf_sun_path = NULL;
 
 static mempool_t conn_pool;
@@ -1746,10 +1746,13 @@ static int sstp_connect(struct triton_md_handler_t *h)
 	struct sstp_conn_t *conn;
 	struct sockaddr_in addr;
 	struct sockaddr_un addr_un;
-	socklen_t size = sizeof(addr);
+	socklen_t size = (conf_fd_uds ? sizeof(addr_un) : sizeof(addr));
 	int sock, value;
 
 	while (1) {
+		memset(&addr, 0, sizeof(addr));
+		memset(&addr_un, 0, sizeof(addr_un));
+
 		if (conf_fd_uds)
 			sock = accept(h->fd, (struct sockaddr *)&addr_un, &size);
 		else
@@ -1773,7 +1776,7 @@ static int sstp_connect(struct triton_md_handler_t *h)
 		}
 
 		if (conf_fd_uds)
-			log_info2("sstp: new connection from %s\n", addr_un.sun_path);
+			log_info2("sstp: new connection from UDS %s\n", conf_sun_path);
 		else
 			log_info2("sstp: new connection from %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
 
@@ -1895,7 +1898,7 @@ static void sstp_serv_close(struct triton_context_t *ctx)
 	serv->ssl_ctx = NULL;
 #endif
 
-	if (conf_sun_path && (conf_fd_uds >= 0))
+	if (conf_sun_path && conf_fd_uds)
 		unlink(conf_sun_path);
 }
 
