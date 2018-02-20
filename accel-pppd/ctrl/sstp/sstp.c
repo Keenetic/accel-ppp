@@ -186,6 +186,7 @@ static struct hash_t conf_hash_sha256 = { .len = 0 };
 static const char *conf_hostname = NULL;
 static int conf_http_mode = -1;
 static const char *conf_http_url = NULL;
+static int conf_proxyarp = 0;
 
 static mempool_t conn_pool;
 
@@ -2424,6 +2425,7 @@ static int sstp_connect(struct triton_md_handler_t *h)
 		conn->ctrl.name = "sstp";
 		conn->ctrl.ifname = "";
 		conn->ctrl.mppe = MPPE_DENY;
+		conn->ctrl.proxyarp = conf_proxyarp;
 
 		ppp_init(&conn->ppp);
 		conn->ppp.ses.ctrl = &conn->ctrl;
@@ -2877,6 +2879,10 @@ static void load_config(void)
 	opt = conf_get_opt("sstp", "rcvbuf");
 	if (opt && atoi(opt) > 0)
 		conf_rcvbuf = atoi(opt);
+
+	opt = conf_get_opt("sstp", "proxy-arp") ? : conf_get_opt("ppp", "proxy-arp");
+	if (opt && atoi(opt) >= 0)
+		conf_proxyarp = atoi(opt) > 0;
 
 #if 0
 	ipmode = (serv.addr.u.sa.sa_family == AF_INET && !conf_proxyproto) ?

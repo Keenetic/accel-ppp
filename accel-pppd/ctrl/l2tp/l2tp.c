@@ -97,6 +97,7 @@ static const char *conf_ip_pool;
 static const char *conf_ipv6_pool;
 static const char *conf_dpv6_pool;
 static const char *conf_ifname;
+static int conf_proxyarp = 0;
 
 static unsigned int stat_conn_starting;
 static unsigned int stat_conn_active;
@@ -1769,6 +1770,7 @@ static int l2tp_session_start_data_channel(struct l2tp_sess_t *sess)
 	sess->ctrl.terminate = ppp_terminate;
 	sess->ctrl.max_mtu = conf_ppp_max_mtu;
 	sess->ctrl.mppe = conf_mppe;
+	sess->ctrl.proxyarp = conf_proxyarp;
 
 	sess->ctrl.calling_station_id = _malloc(17);
 	if (sess->ctrl.calling_station_id == NULL) {
@@ -4971,6 +4973,10 @@ static void load_config(void)
 	conf_ipv6_pool = conf_get_opt("l2tp", "ipv6-pool");
 	conf_dpv6_pool = conf_get_opt("l2tp", "ipv6-pool-delegate");
 	conf_ifname = conf_get_opt("l2tp", "ifname");
+
+	opt = conf_get_opt("l2tp", "proxy-arp") ? : conf_get_opt("ppp", "proxy-arp");
+	if (opt && atoi(opt) >= 0)
+		conf_proxyarp = atoi(opt) > 0;
 
 #if 0
 	switch (iprange_check_activation()) {
