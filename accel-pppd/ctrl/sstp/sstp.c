@@ -175,6 +175,7 @@ static struct hash_t conf_hash_sha1 = { .len = 0 };
 static struct hash_t conf_hash_sha256 = { .len = 0 };
 //static int conf_bypass_auth = 0;
 static const char *conf_hostname = NULL;
+static int conf_proxyarp = 0;
 
 static mempool_t conn_pool;
 
@@ -2230,7 +2231,7 @@ static int sstp_connect(struct triton_md_handler_t *h)
 		conn->ctrl.name = "sstp";
 		conn->ctrl.ifname = "";
 		conn->ctrl.mppe = MPPE_DENY;
-
+		conn->ctrl.proxyarp = conf_proxyarp;
 		conn->ctrl.calling_station_id = _strdup(addr_buf);
 		addr.len = sizeof(addr.u);
 		getsockname(sock, &addr.u.sa, &addr.len);
@@ -2462,6 +2463,10 @@ static void load_config(void)
 
 	conf_ip_pool = conf_get_opt("sstp", "ip-pool");
 	conf_ifname = conf_get_opt("sstp", "ifname");
+
+	opt = conf_get_opt("sstp", "proxy-arp") ? : conf_get_opt("ppp", "proxy-arp");
+	if (opt && atoi(opt) >= 0)
+		conf_proxyarp = atoi(opt) > 0;
 
 #if 0
 	ipmode = (serv.addr.u.sa.sa_family == AF_INET && !conf_proxyproto) ?
