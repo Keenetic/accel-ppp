@@ -154,6 +154,7 @@ static struct hash_t conf_hash_sha256 = { .len = 0 };
 static const char *conf_hostname = NULL;
 static int conf_fd_uds = 0;
 static const char *conf_sun_path = NULL;
+static int conf_proxyarp = 0;
 
 static mempool_t conn_pool;
 
@@ -1948,6 +1949,7 @@ static int sstp_connect(struct triton_md_handler_t *h)
 		conn->ctrl.mppe = MPPE_UNSET;
 		conn->ctrl.calling_station_id = _malloc(sizeof("255.255.255.255:65535"));
 		conn->ctrl.called_station_id = _malloc(sizeof("255.255.255.255"));
+		conn->ctrl.proxyarp = conf_proxyarp;
 
 		if (conf_fd_uds) {
 			memset(&addr, 0, sizeof(addr));
@@ -2212,6 +2214,10 @@ static void load_config(void)
 
 	conf_ip_pool = conf_get_opt("sstp", "ip-pool");
 	conf_ifname = conf_get_opt("sstp", "ifname");
+
+	opt = conf_get_opt("sstp", "proxy-arp") ? : conf_get_opt("ppp", "proxy-arp");
+	if (opt && atoi(opt) >= 0)
+		conf_proxyarp = atoi(opt) > 0;
 
 #if 0
 	switch (iprange_check_activation()) {
