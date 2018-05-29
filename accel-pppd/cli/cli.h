@@ -1,7 +1,9 @@
 #ifndef __CLI_H
 #define __CLI_H
 
+#if 0
 #include <pcre.h>
+#endif
 #include <list.h>
 
 #define CLI_CMD_OK 0
@@ -19,6 +21,7 @@ struct cli_simple_cmd_t
 	void (*help)(char * const *fields, int field_cnt, void *client);
 };
 
+#if 0
 struct cli_regexp_cmd_t
 {
 	struct list_head entry;
@@ -31,6 +34,7 @@ struct cli_regexp_cmd_t
 	int h_options;
 	int (*help)(const char *cmd, void *client);
 };
+#endif
 
 struct ap_session;
 
@@ -41,7 +45,9 @@ void cli_register_simple_cmd2(
 	int hdr_len,
 	...
 	);
+#if 0
 void cli_register_regexp_cmd(struct cli_regexp_cmd_t *cmd);
+#endif
 void cli_show_ses_register(const char *name, const char *desc, void (*print)(struct ap_session *ses, char *buf));
 
 int cli_send(void *client, const char *data);

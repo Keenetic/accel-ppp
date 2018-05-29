@@ -124,6 +124,7 @@ void __export ap_session_accounting_started(struct ap_session *ses)
 	struct npioctl np;
 	struct ppp_t *ppp;
 	struct arpreq arpreq;
+	struct sockaddr_in addr;
 	int ret;
 
 	if (ses->stop_time)

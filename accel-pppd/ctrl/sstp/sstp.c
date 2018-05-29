@@ -2405,7 +2405,9 @@ error:
 
 static void load_config(void)
 {
+#if 0
 	int ipmode;
+#endif
 	char *opt;
 
 	opt = conf_get_opt("sstp", "verbose");
