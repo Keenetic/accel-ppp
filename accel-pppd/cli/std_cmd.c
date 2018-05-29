@@ -106,6 +106,7 @@ static void __terminate_hard(struct ap_session *ses)
 	ap_session_terminate(ses, TERM_NAS_REQUEST, 1);
 }
 
+#if 0
 static int terminate_exec1(char * const *f, int f_cnt, void *cli)
 {
 	struct ap_session *ses;
@@ -145,6 +146,7 @@ static int terminate_exec1(char * const *f, int f_cnt, void *cli)
 
 	return CLI_CMD_OK;
 }
+#endif
 
 static int terminate_exec2(int key, char * const *f, int f_cnt, void *cli)
 {
@@ -206,9 +208,12 @@ static int terminate_exec(const char *cmd, char * const *fields, int fields_cnt,
 	if (fields_cnt == 1)
 		return CLI_CMD_SYNTAX;
 
+#if 0
 	if (!strcmp(fields[1], "match") && fields_cnt > 3 && !strcmp(fields[2], "username"))
 		return terminate_exec1(fields, fields_cnt, client);
-	else if (!strcmp(fields[1], "username"))
+	else
+#endif
+	if (!strcmp(fields[1], "username"))
 		return terminate_exec2(0, fields, fields_cnt, client);
 	else if (!strcmp(fields[1], "ip"))
 		return terminate_exec2(1, fields, fields_cnt, client);

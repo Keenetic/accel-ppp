@@ -27,7 +27,9 @@ static const char *def_cli_prompt = "accel-ppp";
 char *conf_cli_prompt;
 
 static LIST_HEAD(simple_cmd_list);
+#if 0
 static LIST_HEAD(regexp_cmd_list);
+#endif
 
 void __export cli_register_simple_cmd(struct cli_simple_cmd_t *cmd)
 {
@@ -63,6 +65,7 @@ void __export cli_register_simple_cmd2(
 	va_end(ap);
 }
 
+#if 0
 void __export cli_register_regexp_cmd(struct cli_regexp_cmd_t *cmd)
 {
 	int err;
@@ -107,6 +110,7 @@ void __export cli_register_regexp_cmd(struct cli_regexp_cmd_t *cmd)
 
 	list_add_tail(&cmd->entry, &regexp_cmd_list);
 }
+#endif
 
 int __export cli_send(void *client, const char *data)
 {
@@ -168,7 +172,9 @@ static int split(char *buf, char **ptr)
 
 static int cli_process_help_cmd(struct cli_client_t *cln)
 {
+#if 0
 	struct cli_regexp_cmd_t *recmd = NULL;
+#endif
 	struct cli_simple_cmd_t *sicmd = NULL;
 	char *cmd = (char *)cln->cmdline;
 	char *items[MAX_CMD_ITEMS] = { 0 };
@@ -188,6 +194,7 @@ static int cli_process_help_cmd(struct cli_client_t *cln)
 		/* "help" with no argument always succeeds */
 		cmd_found = 1;
 
+#if 0
 	list_for_each_entry(recmd, &regexp_cmd_list, entry) {
 		if (cmd[0] == '\0'
 		    || pcre_exec(recmd->h_re, NULL, cmd, strlen(cmd),
@@ -197,6 +204,7 @@ static int cli_process_help_cmd(struct cli_client_t *cln)
 				recmd->help(cmd, cln);
 		}
 	}
+#endif
 
 	nb_items = split(cmd, items);
 	list_for_each_entry(sicmd, &simple_cmd_list, entry) {
@@ -222,6 +230,7 @@ static int cli_process_help_cmd(struct cli_client_t *cln)
 	return 1;
 }
 
+#if 0
 static int cli_process_regexp_cmd(struct cli_client_t *cln, int *err)
 {
 	struct cli_regexp_cmd_t *recmd = NULL;
@@ -243,6 +252,7 @@ static int cli_process_regexp_cmd(struct cli_client_t *cln, int *err)
 
 	return found;
 }
+#endif
 
 static int cli_process_simple_cmd(struct cli_client_t *cln, int *err)
 {
@@ -283,9 +293,13 @@ int __export cli_process_cmd(struct cli_client_t *cln)
 	if (cli_process_help_cmd(cln))
 		return 0;
 
+#if 0
 	found = cli_process_regexp_cmd(cln, &err);
 	if (found && err != CLI_CMD_OK)
 		goto out_found;
+#else
+	found = 0;
+#endif
 
 	found |= cli_process_simple_cmd(cln, &err);
 	if (found)
