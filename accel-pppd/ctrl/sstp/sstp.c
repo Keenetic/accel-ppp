@@ -2600,7 +2600,9 @@ void __export sstp_get_stat(unsigned int **starting, unsigned int **active)
 
 static void load_config(void)
 {
+#if 0
 	int ipmode;
+#endif
 	char *opt;
 
 	opt = conf_get_opt("sstp", "verbose");

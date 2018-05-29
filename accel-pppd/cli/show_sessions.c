@@ -125,11 +125,15 @@ static int show_ses_exec(const char *cmd, char * const *f, int f_cnt, void *cli)
 {
 	char *columns = NULL;
 	struct column_t *match_key = NULL;
+#if 0
 	char *match_pattern = NULL;
+#endif
 	struct column_t *order_key = NULL;
+#if 0
 	pcre *re = NULL;
 	const char *pcre_err;
 	int pcre_offset;
+#endif
 	struct column_t *column;
 	struct col_t *col;
 	struct row_t *row;
@@ -152,6 +156,7 @@ static int show_ses_exec(const char *cmd, char * const *f, int f_cnt, void *cli)
 				cli_sendv(cli, "unknown column %s\r\n", f[i]);
 				return CLI_CMD_OK;
 			}
+#if 0
 		} else if (!strcmp(f[i], "match")) {
 			if (i >= f_cnt - 2)
 				return CLI_CMD_SYNTAX;
@@ -161,12 +166,14 @@ static int show_ses_exec(const char *cmd, char * const *f, int f_cnt, void *cli)
 				return CLI_CMD_OK;
 			}
 			match_pattern = f[++i];
+#endif
 		} else if (!columns)
 			columns = f[i];
 		else
 			return CLI_CMD_SYNTAX;
 	}
 
+#if 0
 	if (match_key) {
 		re = pcre_compile2(match_pattern, 0, NULL, &pcre_err, &pcre_offset, NULL);
 		if (!re) {
@@ -174,6 +181,7 @@ static int show_ses_exec(const char *cmd, char * const *f, int f_cnt, void *cli)
 			return CLI_CMD_OK;
 		}
 	}
+#endif
 
 	if (!columns) {
 		columns = (conf_def_columns) ? conf_def_columns : DEF_COLUMNS;
@@ -260,12 +268,14 @@ static int show_ses_exec(const char *cmd, char * const *f, int f_cnt, void *cli)
 		while(!list_empty(&t_list)) {
 			row = list_entry(t_list.next, typeof(*row), entry);
 			list_del(&row->entry);
+#if 0
 			if (match_key) {
 				if (pcre_exec(re, NULL, row->match_key, strlen(row->match_key), 0, 0, NULL, 0) < 0) {
 					free_row(row);
 					continue;
 				}
 			}
+#endif
 			if (order_key)
 				insert_row(&r_list, row);
 			else
@@ -360,8 +370,10 @@ out:
 		_free(col);
 	}
 
+#if 0
 	if (re)
 		pcre_free(re);
+#endif
 
 	return CLI_CMD_OK;
 
