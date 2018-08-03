@@ -155,6 +155,10 @@ void __export ap_session_accounting_started(struct ap_session *ses)
 		if (!ses->backup || !ses->backup->internal) {
 #endif
 			if (ses->ipv4) {
+				memset(&addr, 0, sizeof(addr));
+				addr.sin_family = AF_INET;
+				addr.sin_addr.s_addr = ses->ipv4->addr;
+
 				if (ses->ipv4->mask == 0 || ses->ipv4->mask == 32) {
 					if (ipaddr_add_peer(ses->ifindex, ses->ipv4->addr, ses->ipv4->peer_addr))
 						log_ppp_error("failed to set IPv4 address: %s\n", strerror(errno));
