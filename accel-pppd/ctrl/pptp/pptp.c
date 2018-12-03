@@ -799,6 +799,7 @@ static void load_config(void)
 	if (opt && atoi(opt) >= 0)
 		conf_proxyarp = atoi(opt) > 0;
 
+#if 0
 	switch (iprange_check_activation()) {
 	case IPRANGE_DISABLED:
 		log_warn("pptp: iprange module disabled, improper IP configuration of PPP interfaces may cause kernel soft lockup\n");
@@ -811,6 +812,7 @@ static void load_config(void)
 		/* Makes compiler happy */
 		break;
 	}
+#endif
 }
 
 static void pptp_init(void)
