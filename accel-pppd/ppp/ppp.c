@@ -30,6 +30,7 @@
 int __export conf_ppp_verbose;
 int conf_unit_cache;
 static int conf_unit_preallocate;
+static int ccp_required = 0;
 
 #define PPP_BUF_SIZE 8192
 static mempool_t buf_pool;
@@ -623,8 +624,8 @@ static int get_layer_order(const char *name)
 	if (!strcmp(name,"lcp")) return 0;
 	if (!strcmp(name,"auth")) return 1;
 	if (!strcmp(name,"ccp")) return 2;
-	if (!strcmp(name,"ipcp")) return 2;
-	if (!strcmp(name,"ipv6cp")) return 2;
+	if (!strcmp(name,"ipcp")) return (ccp_required ? 3 : 2);
+	if (!strcmp(name,"ipv6cp")) return (ccp_required ? 3 : 2);
 	return -1;
 }
 
@@ -754,6 +755,12 @@ static void load_config(void)
 		conf_unit_preallocate = atoi(opt);
 	else
 		conf_unit_preallocate = 0;
+
+	opt = conf_get_opt("ppp", "mppe");
+	if (opt) {
+		if (!strcmp(opt,"require"))
+			ccp_required = 1;
+	}
 }
 
 static void init(void)

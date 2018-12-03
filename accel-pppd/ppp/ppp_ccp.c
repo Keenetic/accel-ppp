@@ -27,6 +27,7 @@ struct recv_opt_t
 
 static int conf_ccp = 1;
 static int conf_ccp_max_configure = 3;
+static int ccp_required = 0;
 
 static struct ppp_layer_t ccp_layer;
 static LIST_HEAD(option_handlers);
@@ -211,9 +212,13 @@ static void ccp_layer_finished(struct ppp_fsm_t *fsm)
 
 	log_ppp_debug("ccp_layer_finished\n");
 
-	if (!ccp->started)
+	if (!ccp->started) {
 		ppp_layer_passive(ccp->ppp, &ccp->ld);
-	else if (!ccp->ppp->ses.terminating)
+
+		if (ccp_required)
+			ap_session_terminate(&ccp->ppp->ses, TERM_USER_ERROR, 0);
+
+	} else if (!ccp->ppp->ses.terminating || ccp_required)
 		ap_session_terminate(&ccp->ppp->ses, TERM_USER_ERROR, 0);
 
 	fsm->fsm_state = FSM_Closed;
@@ -799,6 +804,14 @@ static void load_config(void)
 	opt = conf_get_opt("ppp", "ccp-max-configure");
 	if (opt && atoi(opt) > 0)
 		conf_ccp_max_configure = atoi(opt);
+
+	opt = conf_get_opt("ppp", "mppe");
+	if (opt) {
+		if (!strcmp(opt,"require")) {
+			ccp_required = 1;
+			conf_ccp = 1;
+		}
+	}
 }
 
 static void ccp_init(void)
