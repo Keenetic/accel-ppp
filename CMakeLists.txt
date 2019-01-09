@@ -58,6 +58,11 @@ if (NOT BUILD_DRIVER_ONLY)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-protector -fstack-protector-all")
 	endif (MEMDEBUG)
 
+	IF (FATALSIG_BACKTRACE)
+		add_definitions(-DFATALSIG_BACKTRACE)
+		set(fatalsig_lib fatalsig)
+	endif (FATALSIG_BACKTRACE)
+
 	if (NOT DEFINED CRYPTO)
 		set(CRYPTO OPENSSL)
 	endif (NOT DEFINED CRYPTO)

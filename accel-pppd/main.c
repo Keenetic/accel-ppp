@@ -19,6 +19,10 @@
 #include <openssl/ssl.h>
 #endif
 
+#if defined(FATALSIG_BACKTRACE)
+#include <fatalsig.h>
+#endif
+
 #include "triton/triton.h"
 
 #include "log.h"
@@ -367,10 +371,14 @@ int main(int _argc, char **_argv)
 
 	sigdelset(&set, SIGKILL);
 	sigdelset(&set, SIGSTOP);
+
+#if !defined(FATALSIG_BACKTRACE)
 	sigdelset(&set, SIGSEGV);
 	sigdelset(&set, SIGFPE);
 	sigdelset(&set, SIGILL);
 	sigdelset(&set, SIGBUS);
+#endif
+
 	sigdelset(&set, SIGHUP);
 	sigdelset(&set, SIGIO);
 	sigdelset(&set, SIGUSR1);
@@ -387,6 +395,13 @@ int main(int _argc, char **_argv)
 
 #ifdef USE_BACKUP
 	backup_restore(internal);
+#endif
+
+#if defined(FATALSIG_BACKTRACE)
+	if (fatalsig_init() != 0) {
+		log_info1("unable to initialize libfatalsig");
+		return EXIT_FAILURE;
+	}
 #endif
 
 	sigwait(&set, &sig);
