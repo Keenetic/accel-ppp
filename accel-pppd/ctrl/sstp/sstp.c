@@ -2316,12 +2316,16 @@ static int sstp_connect(struct triton_md_handler_t *h)
 			conn->ppp.ses.ifname_rename = _strdup(conf_ifname);
 
 		sockaddr_ntop(&addr, addr_buf, sizeof(addr_buf), FLAG_NOPORT);
-		conn->ctrl.calling_station_id = _strdup(addr_buf);
+		conn->ctrl.calling_station_id = _malloc(ADDRSTR_MAXLEN + 1);
+		memset(conn->ctrl.calling_station_id, 0, ADDRSTR_MAXLEN + 1);
+		strncpy(conn->ctrl.calling_station_id, addr_buf, ADDRSTR_MAXLEN);
 
 		addr.len = sizeof(addr.u);
 		getsockname(sock, &addr.u.sa, &addr.len);
 		sockaddr_ntop(&addr, addr_buf, sizeof(addr_buf), FLAG_NOPORT);
-		conn->ctrl.called_station_id = _strdup(addr_buf);
+		conn->ctrl.called_station_id = _malloc(ADDRSTR_MAXLEN + 1);
+		memset(conn->ctrl.called_station_id, 0, ADDRSTR_MAXLEN + 1);
+		strncpy(conn->ctrl.called_station_id, addr_buf, ADDRSTR_MAXLEN);
 
 		triton_context_register(&conn->ctx, &conn->ppp.ses);
 		triton_context_call(&conn->ctx, (triton_event_func)sstp_start, conn);
