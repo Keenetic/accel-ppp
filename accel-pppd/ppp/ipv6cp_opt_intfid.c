@@ -128,8 +128,7 @@ static int check_exists(struct ppp_t *self_ppp)
 
 		list_for_each_entry(a1, &ses->ipv6->addr_list, entry) {
 			list_for_each_entry(a2, &self_ppp->ses.ipv6->addr_list, entry) {
-				if (a1->addr.s6_addr32[0] == a2->addr.s6_addr32[0] &&
-						a1->addr.s6_addr32[1] == a2->addr.s6_addr32[1]) {
+				if (memcmp(&a1->addr, &a2->addr, sizeof(a1->addr)) == 0) {
 					log_ppp_warn("ppp: requested IPv6 address already assigned to %s\n", ses->ifname);
 					r = 1;
 					goto out;
