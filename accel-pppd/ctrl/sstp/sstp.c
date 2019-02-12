@@ -723,11 +723,41 @@ error:
 	return -1;
 }
 
+static int reset_peers_addrs(struct sstp_conn_t *conn, struct sockaddr_t *addr)
+{
+	char addr_buf[ADDRSTR_MAXLEN];
+	in_addr_t ip = sockaddr_ipv4(&conn->addr);
+
+	if (ip && triton_module_loaded("connlimit") && connlimit_check(cl_key_from_ipv4(ip)))
+		return -1;
+
+	sockaddr_ntop(&conn->addr, addr_buf, sizeof(addr_buf), 0);
+	log_info2("sstp: proxy: connection from %s\n", addr_buf);
+
+	if (ip && iprange_client_check(ip)) {
+		log_warn("sstp: proxy: IP is out of client-ip-range, droping connection...\n");
+		return -1;
+	}
+
+	if (addr->u.sa.sa_family != AF_UNSPEC) {
+		_free(conn->ppp.ses.chan_name);
+		conn->ppp.ses.chan_name = _strdup(addr_buf);
+
+		sockaddr_ntop(&conn->addr, addr_buf, sizeof(addr_buf), FLAG_NOPORT);
+		_free(conn->ctrl.calling_station_id);
+		conn->ctrl.calling_station_id = _strdup(addr_buf);
+
+		sockaddr_ntop(addr, addr_buf, sizeof(addr_buf), FLAG_NOPORT);
+		_free(conn->ctrl.called_station_id);
+		conn->ctrl.called_station_id = _strdup(addr_buf);
+	}
+
+	return 0;
+}
+
 static int proxy_handler(struct sstp_conn_t *conn, struct buffer_t *buf)
 {
 	struct sockaddr_t addr;
-	char addr_buf[ADDRSTR_MAXLEN];
-	in_addr_t ip;
 	int n;
 
 	if (conn->sstp_state != STATE_SERVER_CALL_DISCONNECTED)
@@ -745,30 +775,8 @@ static int proxy_handler(struct sstp_conn_t *conn, struct buffer_t *buf)
 	} else if (n <= 0)
 		return n;
 
-	ip = sockaddr_ipv4(&conn->addr);
-	if (ip && triton_module_loaded("connlimit") && connlimit_check(cl_key_from_ipv4(ip)))
+	if (reset_peers_addrs(conn, &addr) != 0)
 		return -1;
-
-	sockaddr_ntop(&conn->addr, addr_buf, sizeof(addr_buf), 0);
-	log_info2("sstp: proxy: connection from %s\n", addr_buf);
-
-	if (ip && iprange_client_check(ip)) {
-		log_warn("sstp: proxy: IP is out of client-ip-range, droping connection...\n");
-		return -1;
-	}
-
-	if (addr.u.sa.sa_family != AF_UNSPEC) {
-		_free(conn->ppp.ses.chan_name);
-		conn->ppp.ses.chan_name = _strdup(addr_buf);
-
-		sockaddr_ntop(&conn->addr, addr_buf, sizeof(addr_buf), FLAG_NOPORT);
-		_free(conn->ctrl.calling_station_id);
-		conn->ctrl.calling_station_id = _strdup(addr_buf);
-
-		sockaddr_ntop(&addr, addr_buf, sizeof(addr_buf), FLAG_NOPORT);
-		_free(conn->ctrl.called_station_id);
-		conn->ctrl.called_station_id = _strdup(addr_buf);
-	}
 
 	buf_pull(buf, n);
 
@@ -862,9 +870,15 @@ static int http_send_response(struct sstp_conn_t *conn, char *proto, char *statu
 static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 {
 	char httpbuf[1024], linebuf[1024];
-	char *line, *method, *request, *proto, *host;
+	char *line, *method, *request, *proto, *host, *xff;
 	struct buffer_t buf;
 	int host_error;
+	struct sockaddr_t addr, peer;
+
+	memset(&addr, 0, sizeof(addr));
+	memset(&peer, 0, sizeof(peer));
+	peer.len = addr.len = sizeof(addr.u.sin);
+	peer.u.sin.sin_family = addr.u.sin.sin_family = AF_INET;
 
 	buf.head = data;
 	buf.end = data + len;
@@ -906,6 +920,59 @@ static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 				host_error = (strcasecmp(host, conf_hostname) != 0);
 			}
 		}
+
+		xff = http_getvalue(line, "X-Forwarded-For", sizeof("X-Forwarded-For") - 1);
+		if (xff) {
+			xff = strsep(&xff, ":");
+
+			if (conf_verbose)
+				log_ppp_info2("recv [HTTP X-Forwarded-For <%s>]\n", xff);
+
+			if (conf_verbose && inet_pton(AF_INET, xff, &peer.u.sin.sin_addr) <= 0)
+			{
+				log_ppp_error("recv [HTTP X-Forwarded-For invalid format]\n");
+			}
+		}
+
+		xff = http_getvalue(line, "X-Forwarded-From", sizeof("X-Forwarded-From") - 1);
+		if (xff) {
+			xff = strsep(&xff, ":");
+
+			if (conf_verbose)
+				log_ppp_info2("recv [HTTP X-Forwarded-From <%s>]\n", xff);
+
+			if (conf_verbose && inet_pton(AF_INET, xff, &addr.u.sin.sin_addr) <= 0)
+			{
+				log_ppp_error("recv [HTTP X-Forwarded-From invalid format]\n");
+			}
+		}
+
+		xff = http_getvalue(line, "X-Forwarded-For-Port", sizeof("X-Forwarded-For-Port") - 1);
+		if (xff) {
+			xff = strsep(&xff, ":");
+
+			if (conf_verbose)
+				log_ppp_info2("recv [HTTP X-Forwarded-For-Port <%s>]\n", xff);
+
+			peer.u.sin.sin_port = htons(atoi(xff));
+		}
+
+		xff = http_getvalue(line, "X-Forwarded-From-Port", sizeof("X-Forwarded-From-Port") - 1);
+		if (xff) {
+			xff = strsep(&xff, ":");
+
+			if (conf_verbose)
+				log_ppp_info2("recv [HTTP X-Forwarded-From-Port <%s>]\n", xff);
+
+			addr.u.sin.sin_port = htons(atoi(xff));
+		}
+	}
+
+	if (addr.u.sin.sin_addr.s_addr != 0 && peer.u.sin.sin_addr.s_addr != 0) {
+		memcpy(&conn->addr, &peer, sizeof(peer));
+
+		if (reset_peers_addrs(conn, &addr) != 0)
+			return -1;
 	}
 
 	if (host_error) {
