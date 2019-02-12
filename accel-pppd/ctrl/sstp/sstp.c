@@ -734,11 +734,41 @@ error:
 	return -1;
 }
 
+static int reset_peers_addrs(struct sstp_conn_t *conn, struct sockaddr_t *addr)
+{
+	char addr_buf[ADDRSTR_MAXLEN];
+	in_addr_t ip = sockaddr_ipv4(&conn->addr);
+
+	if (ip && triton_module_loaded("connlimit") && connlimit_check(cl_key_from_ipv4(ip)))
+		return -1;
+
+	sockaddr_ntop(&conn->addr, addr_buf, sizeof(addr_buf), 0);
+	log_info2("sstp: proxy: connection from %s\n", addr_buf);
+
+	if (ip && iprange_client_check(ip)) {
+		log_warn("sstp: proxy: IP is out of client-ip-range, droping connection...\n");
+		return -1;
+	}
+
+	if (addr->u.sa.sa_family != AF_UNSPEC) {
+		_free(conn->ppp.ses.chan_name);
+		conn->ppp.ses.chan_name = _strdup(addr_buf);
+
+		sockaddr_ntop(&conn->addr, addr_buf, sizeof(addr_buf), FLAG_NOPORT);
+		_free(conn->ctrl.calling_station_id);
+		conn->ctrl.calling_station_id = _strdup(addr_buf);
+
+		sockaddr_ntop(addr, addr_buf, sizeof(addr_buf), FLAG_NOPORT);
+		_free(conn->ctrl.called_station_id);
+		conn->ctrl.called_station_id = _strdup(addr_buf);
+	}
+
+	return 0;
+}
+
 static int proxy_handler(struct sstp_conn_t *conn, struct buffer_t *buf)
 {
 	struct sockaddr_t addr;
-	char addr_buf[ADDRSTR_MAXLEN];
-	in_addr_t ip;
 	int n;
 
 	if (conn->sstp_state != STATE_SERVER_CALL_DISCONNECTED)
@@ -756,30 +786,8 @@ static int proxy_handler(struct sstp_conn_t *conn, struct buffer_t *buf)
 	} else if (n <= 0)
 		return n;
 
-	ip = sockaddr_ipv4(&conn->addr);
-	if (ip && triton_module_loaded("connlimit") && connlimit_check(cl_key_from_ipv4(ip)))
+	if (reset_peers_addrs(conn, &addr) != 0)
 		return -1;
-
-	sockaddr_ntop(&conn->addr, addr_buf, sizeof(addr_buf), 0);
-	log_info2("sstp: proxy: connection from %s\n", addr_buf);
-
-	if (ip && iprange_client_check(ip)) {
-		log_warn("sstp: proxy: IP is out of client-ip-range, droping connection...\n");
-		return -1;
-	}
-
-	if (addr.u.sa.sa_family != AF_UNSPEC) {
-		_free(conn->ppp.ses.chan_name);
-		conn->ppp.ses.chan_name = _strdup(addr_buf);
-
-		sockaddr_ntop(&conn->addr, addr_buf, sizeof(addr_buf), FLAG_NOPORT);
-		_free(conn->ctrl.calling_station_id);
-		conn->ctrl.calling_station_id = _strdup(addr_buf);
-
-		sockaddr_ntop(&addr, addr_buf, sizeof(addr_buf), FLAG_NOPORT);
-		_free(conn->ctrl.called_station_id);
-		conn->ctrl.called_station_id = _strdup(addr_buf);
-	}
 
 	buf_pull(buf, n);
 
@@ -873,9 +881,17 @@ static int http_send_response(struct sstp_conn_t *conn, char *proto, char *statu
 static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 {
 	char httpbuf[1024], linebuf[1024];
-	char *line, *method, *request, *proto, *host;
+	char *line, *method, *request, *proto, *host, *xff, *xsh;
+	char *hh = NULL, *snih = NULL;
 	struct buffer_t buf;
 	int host_error;
+	int from_uds = 0;
+	struct sockaddr_t addr, peer;
+
+	memset(&addr, 0, sizeof(addr));
+	memset(&peer, 0, sizeof(peer));
+	peer.len = addr.len = sizeof(addr.u.sin);
+	peer.u.sin.sin_family = addr.u.sin.sin_family = AF_INET;
 
 	buf.head = data;
 	buf.end = data + len;
@@ -912,17 +928,120 @@ static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 
 		if (host_error < 0) {
 			host = http_getvalue(line, "Host", sizeof("Host") - 1);
-			if (host) {
+			if (host && hh == NULL) {
 				host = strsep(&host, ":");
 				host_error = (strcasecmp(host, conf_hostname) != 0);
+
+				if (host_error) {
+					log_ppp_error("HTTP request Host header <%s> doesn't match expected <%s>\n", host, conf_hostname);
+					log_ppp_error("Connection can be compromised\n");
+				}
+
+				hh = strdup(host);
+			} else
+			if (hh != NULL) {
+				log_ppp_error("Duplicating HTTP host header, aborting\n");
+				free(hh);
+				return -1;
+			}
+		}
+
+		if (conf_hostname) {
+			xsh = http_getvalue(line, "X-Sni-Host", sizeof("X-Sni-Host") - 1);
+			if (xsh && snih == NULL) {
+				snih = strdup(xsh);
+			} else
+			if (xsh && snih != NULL) {
+				log_ppp_error("Duplicating SNI header, aborting\n");
+				free(snih);
+				return -1;
+			}
+		}
+
+		xff = http_getvalue(line, "X-Forwarded-For", sizeof("X-Forwarded-For") - 1);
+		if (xff) {
+			xff = strsep(&xff, ":");
+
+			if (conf_verbose)
+				log_ppp_info2("recv [HTTP X-Forwarded-For <%s>]\n", xff);
+
+			if (inet_pton(AF_INET, xff, &peer.u.sin.sin_addr) <= 0 && conf_verbose)
+			{
+				log_ppp_error("recv [HTTP X-Forwarded-For invalid format]\n");
+			}
+		}
+
+		xff = http_getvalue(line, "X-Forwarded-From", sizeof("X-Forwarded-From") - 1);
+		if (xff) {
+			xff = strsep(&xff, ":");
+
+			if (conf_verbose)
+				log_ppp_info2("recv [HTTP X-Forwarded-From <%s>]\n", xff);
+
+			if (inet_pton(AF_INET, xff, &addr.u.sin.sin_addr) <= 0)
+			{
+				if( !strcmp(xff, "unix") )
+				{
+					from_uds = 1;
+
+				} else
+				if( conf_verbose )
+				{
+					log_ppp_error("recv [HTTP X-Forwarded-From invalid format]\n");
+				}
+			}
+		}
+
+		xff = http_getvalue(line, "X-Forwarded-For-Port", sizeof("X-Forwarded-For-Port") - 1);
+		if (xff) {
+			xff = strsep(&xff, ":");
+
+			if (conf_verbose)
+				log_ppp_info2("recv [HTTP X-Forwarded-For-Port <%s>]\n", xff);
+
+			peer.u.sin.sin_port = htons(atoi(xff));
+		}
+
+		if (!from_uds) {
+			xff = http_getvalue(line, "X-Forwarded-From-Port", sizeof("X-Forwarded-From-Port") - 1);
+			if (xff) {
+				xff = strsep(&xff, ":");
+
+				if (conf_verbose)
+					log_ppp_info2("recv [HTTP X-Forwarded-From-Port <%s>]\n", xff);
+
+				addr.u.sin.sin_port = htons(atoi(xff));
 			}
 		}
 	}
 
-	if (host_error) {
-		if (conf_http_mode)
-			http_send_response(conn, proto, "404 Not Found", NULL);
-		return -1;
+	if (conf_hostname) {
+		if (hh == NULL) {
+			log_ppp_error("Unable to detect HTTP host\n");
+		} else
+		if (snih == NULL) {
+			log_ppp_error("Unable to detect SNI hostname\n");
+		} else
+		if (strcasecmp(hh, snih)) {
+			log_ppp_error("HTTP request Host header <%s> doesn't match SSL SNI <%s>\n", hh, snih);
+			log_ppp_error("Connection can be compromised\n");
+		}
+	}
+
+	free(hh);
+	free(snih);
+
+	if ((addr.u.sin.sin_addr.s_addr != 0 || from_uds) &&
+		 peer.u.sin.sin_addr.s_addr != 0) {
+		memcpy(&conn->addr, &peer, sizeof(peer));
+
+		if (from_uds) {
+			addr.u.sin.sin_family = AF_INET;
+			addr.u.sin.sin_addr.s_addr = htonl(0x7f000001);
+		}
+
+		if (reset_peers_addrs(conn, &addr) != 0)
+			return -1;
 	}
 
 	if (strcasecmp(method, SSTP_HTTP_METHOD) != 0 || strcasecmp(request, SSTP_HTTP_URI) != 0) {
