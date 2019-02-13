@@ -2821,10 +2821,13 @@ static void sstp_init(void)
 		goto error_close;
 	}
 
-	if (addr->u.sa.sa_family == AF_UNIX) {
-		if (addr->u.sun.sun_path[0] &&
-		    stat(addr->u.sun.sun_path, &st) == 0 && S_ISSOCK(st.st_mode)) {
-			unlink(addr->u.sun.sun_path);
+	if (addr->u.sa.sa_family == AF_UNIX && addr->u.sun.sun_path[0]) {
+		if (unlink(addr->u.sun.sun_path)) {
+			const int err = errno;
+			if (err != ENOENT) {
+				log_emerg("sstp: unable to unlink UDS socket: %s\n", strerror(err));
+				return;
+			}
 		}
 	} else {
 		value = 1;
