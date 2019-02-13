@@ -928,7 +928,7 @@ static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 			if (conf_verbose)
 				log_ppp_info2("recv [HTTP X-Forwarded-For <%s>]\n", xff);
 
-			if (conf_verbose && inet_pton(AF_INET, xff, &peer.u.sin.sin_addr) <= 0)
+			if (inet_pton(AF_INET, xff, &peer.u.sin.sin_addr) <= 0 && conf_verbose)
 			{
 				log_ppp_error("recv [HTTP X-Forwarded-For invalid format]\n");
 			}
@@ -941,7 +941,7 @@ static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 			if (conf_verbose)
 				log_ppp_info2("recv [HTTP X-Forwarded-From <%s>]\n", xff);
 
-			if (conf_verbose && inet_pton(AF_INET, xff, &addr.u.sin.sin_addr) <= 0)
+			if (inet_pton(AF_INET, xff, &addr.u.sin.sin_addr) <= 0 && conf_verbose)
 			{
 				log_ppp_error("recv [HTTP X-Forwarded-From invalid format]\n");
 			}
