@@ -251,7 +251,7 @@ static int mppe_recv_conf_req(struct ppp_ccp_t *ccp, struct ccp_option_t *opt, u
 
 	bits = ntohl(opt32->val);
 	changed =
-		((bits & (MPPE_H | MPPE_L | MPPE_M | MPPE_S)) !=
+		((bits & (MPPE_H | MPPE_L | MPPE_M | MPPE_S | MPPE_C)) !=
 		 (MPPE_H | (mppe_opt->mppe_40 ? MPPE_L : 0) | (mppe_opt->mppe_128 ? MPPE_S : 0)));
 	mppe_opt->mppe_40 = mppe_opt->mppe_40 && (bits & MPPE_L);
 	mppe_opt->mppe_128 = mppe_opt->mppe_128 && (bits & MPPE_S);
@@ -310,6 +310,11 @@ static int mppe_recv_conf_req(struct ppp_ccp_t *ccp, struct ccp_option_t *opt, u
 		return CCP_OPT_REJ;
 	}
 
+	if (bits & MPPE_C) {
+		log_ppp_debug(" mppc requested, send NAK\n");
+		return CCP_OPT_NAK;
+	}
+
 	if (mppe_opt->mppe) {
 		if (setup_mppe_key(ccp->ppp->unit_fd, 1, mppe_opt, mppe_opt->send_key))
 			return CCP_OPT_REJ;
@@ -354,6 +359,11 @@ static int mppe_recv_conf_rej(struct ppp_ccp_t *ccp, struct ccp_option_t *opt, u
 
 		log_mppe_state(mppe_opt);
 
+		if (bits & MPPE_C) {
+			log_ppp_debug("mppc required, terminate\n");
+			return -1;
+		}
+
 		return 0;
 	}
 
@@ -364,6 +374,11 @@ static int mppe_recv_conf_rej(struct ppp_ccp_t *ccp, struct ccp_option_t *opt, u
 
 	if ((mppe_40 && (bits & MPPE_L)) || (mppe_128 && (bits & MPPE_S))) {
 		log_ppp_debug("mppe: encryption rejected, terminate\n");
+		return -1;
+	}
+
+	if (bits & MPPE_C) {
+		log_ppp_debug("mppc required, terminate\n");
 		return -1;
 	}
 
@@ -392,6 +407,11 @@ static int mppe_recv_conf_ack(struct ppp_ccp_t *ccp, struct ccp_option_t *opt, u
 
 	if (has_mppe)
 		log_ppp_debug("mppe: mppe acknowleged\n");
+
+	if (bits & MPPE_C) {
+		log_ppp_debug("mppc required, terminate\n");
+		return -1;
+	}
 
 	if (mppe_opt->policy == 2) {
 		if (!has_mppe) {
