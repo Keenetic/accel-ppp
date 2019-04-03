@@ -215,11 +215,14 @@ static void ccp_layer_finished(struct ppp_fsm_t *fsm)
 	if (!ccp->started) {
 		ppp_layer_passive(ccp->ppp, &ccp->ld);
 
-		if (ccp_required)
+		if (ccp_required) {
+			log_ppp_debug("CCP is required\n");
 			ap_session_terminate(&ccp->ppp->ses, TERM_USER_ERROR, 0);
-
-	} else if (!ccp->ppp->ses.terminating || ccp_required)
+		}
+	} else if ((!ccp->ppp->ses.terminating && !(ccp->ld.optional && !ccp_required)) || ccp_required) {
+		log_ppp_debug("CCP is required or is incorrect state\n");
 		ap_session_terminate(&ccp->ppp->ses, TERM_USER_ERROR, 0);
+	}
 
 	fsm->fsm_state = FSM_Closed;
 }
