@@ -534,6 +534,10 @@ int l2tp_packet_send(int sock, struct l2tp_packet_t *pack)
 		if (errno == EAGAIN) {
 			if (conf_verbose)
 				log_warn("l2tp: buffer overflow (packet lost)\n");
+		} else
+		if (errno == EPERM) {
+			if (conf_verbose)
+				log_warn("l2tp: secure level unavailable (packet lost)\n");
 		} else {
 			if (conf_verbose)
 				log_warn("l2tp: sendto: %s\n", strerror(errno));
