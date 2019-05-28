@@ -78,7 +78,7 @@ ADD_EXECUTABLE(accel-pppd
 	ifcfg.c
 	net.c
 
-#	backup/backup.c
+	backup/backup.c
 
 	ppp/ppp.c
 	ppp/ppp_fsm.c
@@ -97,11 +97,11 @@ ADD_EXECUTABLE(accel-pppd
 	ppp/ppp_ccp.c
 	ppp/ccp_mppe.c
 
-#	cli/std_cmd.c
-#	cli/show_sessions.c
-#	cli/telnet.c
-#	cli/tcp.c
-#	cli/cli.c
+	cli/std_cmd.c
+	cli/show_sessions.c
+	cli/telnet.c
+	cli/tcp.c
+	cli/cli.c
 
 	libnetlink/libnetlink.c
 	libnetlink/iputils.c
