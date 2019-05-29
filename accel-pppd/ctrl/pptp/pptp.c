@@ -107,7 +107,7 @@ static void disconnect(struct pptp_conn_t *conn)
 
 	triton_event_fire(EV_CTRL_FINISHED, &conn->ppp.ses);
 
-	log_ppp_info1("disconnected\n");
+	log_ppp_info1("pptp: disconnected\n");
 
 	triton_context_unregister(&conn->ctx);
 
@@ -660,7 +660,7 @@ static int pptp_connect(struct triton_md_handler_t *h)
 			continue;
 		}
 
-		log_info2("pptp: new connection from %s\n", inet_ntoa(addr.sin_addr));
+		log_info1("pptp: new connection from %s\n", inet_ntoa(addr.sin_addr));
 
 		if (iprange_client_check(addr.sin_addr.s_addr)) {
 			log_warn("pptp: IP is out of client-ip-range, droping connection...\n");

@@ -11,12 +11,14 @@
 #include "log.h"
 
 #include "ppp_auth.h"
+#include "ndm_feedback.h"
 
 #include "memdebug.h"
 
 static LIST_HEAD(auth_handlers);
 static int extra_opt_len = 0;
 static int conf_noauth = 0;
+static uint16_t conf_bfd_port = 0;
 
 static struct lcp_option_t *auth_init(struct ppp_lcp_t *lcp);
 static void auth_free(struct ppp_lcp_t *lcp, struct lcp_option_t *opt);
@@ -318,6 +320,10 @@ void __export ppp_auth_failed(struct ppp_t *ppp, char *username)
 		triton_event_fire(EV_SES_AUTH_FAILED, ppp);
 	} else
 		log_ppp_info1("authentication failed\n");
+
+	if (conf_bfd_port != 0)
+		ndm_send_feedback(ppp->ses.ctrl->calling_station_id, conf_bfd_port);
+
 	ap_session_terminate(&ppp->ses, TERM_AUTH_ERROR, 0);
 }
 
@@ -350,6 +356,12 @@ static void load_config(void)
 		conf_noauth = atoi(opt);
 	else
 		conf_noauth = 0;
+
+	opt = conf_get_opt("auth", "conf_bfd_port");
+	if (opt)
+		conf_bfd_port = atoi(opt);
+	else
+		conf_bfd_port = 0;
 }
 
 static void ppp_auth_init()
