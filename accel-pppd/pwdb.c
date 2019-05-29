@@ -19,7 +19,7 @@ int __export pwdb_check(struct ap_session *ses, pwdb_callback cb, void *cb_arg, 
 
 	if (ap_check_username(username)) {
 		log_ppp_info1("%s: second session denied\n", username);
-		return PWDB_DENIED;
+		return PWDB_DENIED_SECOND;
 	}
 
 	va_start(args, type);

@@ -170,7 +170,7 @@ static void chap_timeout_timer(struct triton_timer_t *t)
 		if (d->started)
 			ap_session_terminate(&d->ppp->ses, TERM_USER_ERROR, 0);
 		else
-			ppp_auth_failed(d->ppp, NULL);
+			ppp_auth_failed(d->ppp, NULL, 0);
 	} else
 		chap_send_challenge(d, 0);
 }
@@ -327,13 +327,13 @@ static void auth_result(struct chap_auth_data *ad, int res)
 
 	ad->name = NULL;
 
-	if (res == PWDB_DENIED) {
+	if (res == PWDB_DENIED || res == PWDB_DENIED_SECOND) {
 		chap_send_failure(ad, ad->mschap_error, ad->reply_msg);
 		if (ad->started) {
 			ap_session_terminate(&ad->ppp->ses, TERM_AUTH_ERROR, 0);
 			_free(name);
 		} else
-			ppp_auth_failed(ad->ppp, name);
+			ppp_auth_failed(ad->ppp, name, (res == PWDB_DENIED_SECOND));
 	} else {
 		if (!ad->started) {
 			if (ppp_auth_succeeded(ad->ppp, name)) {
@@ -409,7 +409,7 @@ static void chap_recv_response(struct chap_auth_data *ad, struct chap_hdr *hdr)
 		if (ad->started)
 			ap_session_terminate(&ad->ppp->ses, TERM_USER_ERROR, 0);
 		else
-			ppp_auth_failed(ad->ppp, NULL);
+			ppp_auth_failed(ad->ppp, NULL, 0);
 		return;
 	}
 
@@ -419,7 +419,7 @@ static void chap_recv_response(struct chap_auth_data *ad, struct chap_hdr *hdr)
 		if (ad->started)
 			ap_session_terminate(&ad->ppp->ses, TERM_NAS_ERROR, 0);
 		else
-			ppp_auth_failed(ad->ppp, NULL);
+			ppp_auth_failed(ad->ppp, NULL, 0);
 		return;
 	}
 
@@ -438,13 +438,13 @@ static void chap_recv_response(struct chap_auth_data *ad, struct chap_hdr *hdr)
 			r = PWDB_DENIED;
 	}
 
-	if (r == PWDB_DENIED) {
+	if (r == PWDB_DENIED || r == PWDB_DENIED_SECOND) {
 		chap_send_failure(ad, ad->mschap_error, ad->reply_msg);
 		if (ad->started) {
 			_free(name);
 			ap_session_terminate(&ad->ppp->ses, TERM_AUTH_ERROR, 0);
 		} else
-			ppp_auth_failed(ad->ppp, name);
+			ppp_auth_failed(ad->ppp, name, (r == PWDB_DENIED_SECOND));
 
 		if (ad->mschap_error != conf_msg_failure) {
 			_free(ad->mschap_error);

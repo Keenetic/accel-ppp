@@ -33,7 +33,7 @@ struct ppp_auth_handler_t
 int ppp_auth_register_handler(struct ppp_auth_handler_t*);
 
 int ppp_auth_succeeded(struct ppp_t *ppp, char *username);
-void ppp_auth_failed(struct ppp_t *ppp, char *username);
+void ppp_auth_failed(struct ppp_t *ppp, char *username, int second_denied);
 int ppp_auth_restart(struct ppp_t *ppp);
 
 #endif
