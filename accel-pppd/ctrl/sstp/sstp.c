@@ -743,7 +743,7 @@ static int reset_peers_addrs(struct sstp_conn_t *conn, struct sockaddr_t *addr)
 		return -1;
 
 	sockaddr_ntop(&conn->addr, addr_buf, sizeof(addr_buf), 0);
-	log_info2("sstp: proxy: connection from %s\n", addr_buf);
+	log_info1("sstp: proxy: connection from %s\n", addr_buf);
 
 	if (ip && iprange_client_check(ip)) {
 		log_warn("sstp: proxy: IP is out of client-ip-range, droping connection...\n");
