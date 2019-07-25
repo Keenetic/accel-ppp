@@ -216,7 +216,7 @@ static void ccp_layer_finished(struct ppp_fsm_t *fsm)
 		ppp_layer_passive(ccp->ppp, &ccp->ld);
 
 		if (ccp_required) {
-			log_ppp_debug("CCP is required\n");
+			log_ppp_info1("CCP is required\n");
 			ap_session_terminate(&ccp->ppp->ses, TERM_USER_ERROR, 0);
 		}
 	} else if ((!ccp->ppp->ses.terminating && !(ccp->ld.optional && !ccp_required)) || ccp_required) {
@@ -738,6 +738,8 @@ static void ccp_recv(struct ppp_handler_t*h)
 static void ccp_recv_proto_rej(struct ppp_handler_t *h)
 {
 	struct ppp_ccp_t *ccp = container_of(h, typeof(*ccp), hnd);
+
+	log_ppp_info1("CCP rejected by peer");
 
 	if (!ccp->ld.optional) {
 		ap_session_terminate(&ccp->ppp->ses, TERM_USER_ERROR, 0);

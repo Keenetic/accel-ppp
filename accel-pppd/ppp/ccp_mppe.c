@@ -124,7 +124,7 @@ static void mppe_free(struct ppp_ccp_t *ccp, struct ccp_option_t *opt)
 	_free(mppe_opt);
 }
 
-static int setup_mppe_key(int fd, int transmit, struct mppe_option_t *mppe_opt, uint8_t *key)
+static int setup_mppe_key(int fd, int transmit, struct mppe_option_t *mppe_opt, uint8_t *key, int log)
 {
 	struct ppp_option_data data;
 	uint8_t buf[6 + 16];
@@ -137,10 +137,17 @@ static int setup_mppe_key(int fd, int transmit, struct mppe_option_t *mppe_opt, 
 		return -1;
 	}
 
-	if (mppe_opt->mppe_128)
-		log_ppp_info2("mppe: using 128 bit stateless mode\n");
-	else
-		log_ppp_info2("mppe: using 40 bit stateless mode\n");
+	if (mppe_opt->mppe_128) {
+		if (log)
+			log_ppp_info1("mppe: using 128 bit stateless mode\n");
+		else
+			log_ppp_info2("mppe: using 128 bit stateless mode\n");
+	} else {
+		if (log)
+			log_ppp_info1("mppe: using 40 bit stateless mode\n");
+		else
+			log_ppp_info2("mppe: using 40 bit stateless mode\n");
+	}
 
 	memset(buf, 0, sizeof(buf));
 	buf[0] = CI_MPPE;
@@ -193,7 +200,7 @@ static int __mppe_send_conf_req(struct ppp_ccp_t *ccp, struct ccp_option_t *opt,
 		opt32->hdr.len = 6;
 		opt32->val = mppe_opt->mppe ? htonl((mppe_opt->mppe_128 ? MPPE_S : (mppe_opt->mppe_40 ? MPPE_L : 0)) | MPPE_H) : 0;
 
-		if (setup_key && mppe_opt->mppe && setup_mppe_key(ccp->ppp->unit_fd, 0, mppe_opt, mppe_opt->recv_key))
+		if (setup_key && mppe_opt->mppe && setup_mppe_key(ccp->ppp->unit_fd, 0, mppe_opt, mppe_opt->recv_key, 0))
 			return 0;
 
 		return 6;
@@ -273,7 +280,7 @@ static int mppe_recv_conf_req(struct ppp_ccp_t *ccp, struct ccp_option_t *opt, u
 				return CCP_OPT_NAK;
 			}
 
-			log_ppp_debug("mppe: unencrypted connections are prohibited\n");
+			log_ppp_info1("mppe: unencrypted connections are prohibited\n");
 
 			return CCP_OPT_REJ;
 		} else
@@ -311,12 +318,12 @@ static int mppe_recv_conf_req(struct ppp_ccp_t *ccp, struct ccp_option_t *opt, u
 	}
 
 	if (bits & MPPE_C) {
-		log_ppp_debug(" mppc requested, send NAK\n");
+		log_ppp_debug("mppc requested, send NAK\n");
 		return CCP_OPT_NAK;
 	}
 
 	if (mppe_opt->mppe) {
-		if (setup_mppe_key(ccp->ppp->unit_fd, 1, mppe_opt, mppe_opt->send_key))
+		if (setup_mppe_key(ccp->ppp->unit_fd, 1, mppe_opt, mppe_opt->send_key, 1))
 			return CCP_OPT_REJ;
 
 		if (!mppe_opt->enabled) {
@@ -353,14 +360,14 @@ static int mppe_recv_conf_rej(struct ppp_ccp_t *ccp, struct ccp_option_t *opt, u
 		bits = ntohl(opt32->val);
 
 		if ((mppe_40 && (bits & MPPE_L)) || (mppe_128 && (bits & MPPE_S))) {
-			log_ppp_debug("mppe: encryption rejected, proceed\n");
+			log_ppp_info1("mppe: encryption rejected, proceed\n");
 			mppe_opt->mppe = -1;
 		}
 
 		log_mppe_state(mppe_opt);
 
 		if (bits & MPPE_C) {
-			log_ppp_debug("mppc required, terminate\n");
+			log_ppp_info1("mppe: mppc required, terminate\n");
 			return -1;
 		}
 
@@ -373,12 +380,12 @@ static int mppe_recv_conf_rej(struct ppp_ccp_t *ccp, struct ccp_option_t *opt, u
 	bits = ntohl(opt32->val);
 
 	if ((mppe_40 && (bits & MPPE_L)) || (mppe_128 && (bits & MPPE_S))) {
-		log_ppp_debug("mppe: encryption rejected, terminate\n");
+		log_ppp_info1("mppe: encryption required, but rejected, terminate\n");
 		return -1;
 	}
 
 	if (bits & MPPE_C) {
-		log_ppp_debug("mppc required, terminate\n");
+		log_ppp_info1("mppe:mppc required, terminate\n");
 		return -1;
 	}
 
@@ -409,13 +416,13 @@ static int mppe_recv_conf_ack(struct ppp_ccp_t *ccp, struct ccp_option_t *opt, u
 		log_ppp_debug("mppe: mppe acknowleged\n");
 
 	if (bits & MPPE_C) {
-		log_ppp_debug("mppc required, terminate\n");
+		log_ppp_info1("mppe: mppc required, terminate\n");
 		return -1;
 	}
 
 	if (mppe_opt->policy == 2) {
 		if (!has_mppe) {
-			log_ppp_debug("mppe: encryption rejected, terminate\n");
+			log_ppp_info1("mppe: encryption required, but rejected, terminate\n");
 			return -1;
 		}
 	} else if (mppe_opt->policy == 1) {
@@ -456,7 +463,7 @@ static int mppe_recv_conf_nak(struct ppp_ccp_t *ccp, struct ccp_option_t *opt, u
 
 	if (mppe_opt->policy == 2) {
 		if (!has_mppe) {
-			log_ppp_debug("mppe: encryption rejected, terminate\n");
+			log_ppp_info1("mppe: encryption required, but rejected, terminate\n");
 			return -1;
 		}
 	} else if (mppe_opt->policy == 1) {
