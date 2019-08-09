@@ -7,6 +7,7 @@ SET(sources_c
 	lcp_opt_magic.c
 	lcp_opt_pcomp.c
 	lcp_opt_accomp.c
+	lcp_opt_accm.c
 	ppp_auth.c
 	ppp_ipcp.c
 	ipcp_opt_ipaddr.c

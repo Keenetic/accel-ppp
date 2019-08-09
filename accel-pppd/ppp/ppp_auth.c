@@ -27,6 +27,7 @@ static int auth_recv_conf_nak(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, u
 static int auth_recv_conf_rej(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, uint8_t *ptr);
 static int auth_recv_conf_ack(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, uint8_t *ptr);
 static void auth_print(void (*print)(const char *fmt,...), struct lcp_option_t*, uint8_t *ptr);
+static int auth_apply_up(struct ppp_lcp_t *lcp, struct lcp_option_t *opt);
 
 static struct ppp_layer_data_t *auth_layer_init(struct ppp_t*);
 static int auth_layer_start(struct ppp_layer_data_t *);
@@ -61,6 +62,7 @@ static struct lcp_option_handler_t auth_opt_hnd =
 	.recv_conf_ack = auth_recv_conf_ack,
 	.free = auth_free,
 	.print = auth_print,
+	.apply_up = auth_apply_up
 };
 
 static struct ppp_layer_t auth_layer =
@@ -116,6 +118,11 @@ static void auth_free(struct ppp_lcp_t *lcp, struct lcp_option_t *opt)
 		list_del(&d->entry);
 		d->h->free(lcp->ppp, d);
 	}
+}
+
+static int auth_apply_up(struct ppp_lcp_t *lcp, struct lcp_option_t *opt)
+{
+	return 0;
 }
 
 static int auth_send_conf_req(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, uint8_t *ptr)

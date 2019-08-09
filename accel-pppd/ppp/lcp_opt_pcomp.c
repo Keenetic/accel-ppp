@@ -22,6 +22,7 @@ static int pcomp_recv_conf_rej(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, 
 static int pcomp_recv_conf_nak(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, uint8_t *ptr);
 static int pcomp_recv_conf_ack(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, uint8_t *ptr);
 static void pcomp_print(void (*print)(const char *fmt, ...), struct lcp_option_t *opt, uint8_t *ptr);
+static int pcomp_apply_up(struct ppp_lcp_t *lcp, struct lcp_option_t *opt);
 
 struct pcomp_option_t
 {
@@ -39,6 +40,7 @@ static struct lcp_option_handler_t pcomp_opt_hnd =
 	.recv_conf_ack = pcomp_recv_conf_ack,
 	.free = pcomp_free,
 	.print = pcomp_print,
+	.apply_up = pcomp_apply_up
 };
 
 static struct lcp_option_t *pcomp_init(struct ppp_lcp_t *lcp)
@@ -58,6 +60,50 @@ static void pcomp_free(struct ppp_lcp_t *lcp, struct lcp_option_t *opt)
 	struct pcomp_option_t *pcomp_opt = container_of(opt, typeof(*pcomp_opt), opt);
 
 	_free(pcomp_opt);
+}
+
+static int pcomp_apply(int fd, int pcomp, int ignore_io, int* err)
+{
+	int flags;
+
+	if (net->ppp_ioctl(fd, PPPIOCGFLAGS, &flags)) {
+		*err = errno;
+
+		if (ignore_io && (*err == EIO || *err == ENOTTY))
+			return 0;
+
+		return -1;
+	}
+
+	flags &= ~SC_COMP_PROT;
+	if (pcomp & 1)
+		flags |= SC_COMP_PROT;
+
+	if (net->ppp_ioctl(fd, PPPIOCSFLAGS, &flags)) {
+		*err = errno;
+
+		if (ignore_io && (*err == EIO || *err == ENOTTY))
+			return 0;
+
+		return -1;
+	}
+
+	return 0;
+}
+
+static int pcomp_apply_up(struct ppp_lcp_t *lcp, struct lcp_option_t *opt)
+{
+	struct pcomp_option_t *pcomp_opt = container_of(opt, typeof(*pcomp_opt), opt);
+	int err = 0;
+
+	if (pcomp_apply(lcp->ppp->unit_fd, pcomp_opt->pcomp, 0, &err) ||
+		pcomp_apply(lcp->ppp->chan_fd, pcomp_opt->pcomp, 1, &err)) {
+
+		log_ppp_error("lcp:accomp: failed to set channel PCOMP: %s\n", strerror(err));
+		return -1;
+	}
+
+	return 0;
 }
 
 static int pcomp_send_conf_req(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, uint8_t *ptr)
@@ -109,25 +155,7 @@ static int pcomp_recv_conf_nak(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, 
 
 static int pcomp_recv_conf_ack(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, uint8_t *ptr)
 {
-	struct pcomp_option_t *pcomp_opt = container_of(opt, typeof(*pcomp_opt), opt);
-	int flags;
-
-	if (net->ppp_ioctl(lcp->ppp->chan_fd, PPPIOCGFLAGS, &flags))
-		goto err;
-
-	flags &= ~SC_COMP_PROT;
-	if (pcomp_opt->pcomp & 1)
-		flags |= SC_COMP_PROT;
-
-	if (net->ppp_ioctl(lcp->ppp->chan_fd, PPPIOCSFLAGS, &flags))
-		goto err;
-
 	return 0;
-
-err:
-	if (errno != EIO)
-		log_ppp_error("lcp:pcomp: failed to set channel ACCOMP: %s\n", strerror(errno));
-	return -1;
 }
 
 static void pcomp_print(void (*print)(const char *fmt, ...), struct lcp_option_t *opt, uint8_t *ptr)

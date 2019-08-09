@@ -160,10 +160,22 @@ void lcp_layer_free(struct ppp_layer_data_t *ld)
 static void lcp_layer_up(struct ppp_fsm_t *fsm)
 {
 	struct ppp_lcp_t *lcp = container_of(fsm, typeof(*lcp), fsm);
+	struct lcp_option_t *lopt;
 
 	log_ppp_debug("lcp_layer_started\n");
 
 	if (!lcp->started) {
+		list_for_each_entry(lopt, &lcp->options, entry) {
+			if (lopt->h->apply_up(lcp, lopt) < 0) {
+
+				log_ppp_error("lcp_layer_up: unable to apply settings\n");
+
+				lcp_layer_finished(fsm);
+
+				return;
+			}
+		}
+
 		lcp->started = 1;
 		ppp_layer_started(lcp->ppp, &lcp->ld);
 	}
