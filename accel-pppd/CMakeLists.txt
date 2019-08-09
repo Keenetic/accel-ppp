@@ -87,6 +87,7 @@ ADD_EXECUTABLE(accel-pppd
 	ppp/lcp_opt_magic.c
 	ppp/lcp_opt_pcomp.c
 	ppp/lcp_opt_accomp.c
+	ppp/lcp_opt_accm.c
 	ppp/ppp_auth.c
 	ppp/ppp_ipcp.c
 	ppp/ipcp_opt_ipaddr.c

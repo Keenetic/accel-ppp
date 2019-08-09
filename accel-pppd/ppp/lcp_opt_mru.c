@@ -29,6 +29,7 @@ static int mru_recv_conf_ack(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, ui
 static int mru_recv_conf_nak(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, uint8_t *ptr);
 static int mru_recv_conf_rej(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, uint8_t *ptr);
 static void mru_print(void (*print)(const char *fmt, ...), struct lcp_option_t*, uint8_t *ptr);
+static int mru_apply_up(struct ppp_lcp_t *lcp, struct lcp_option_t *opt);
 
 struct mru_option_t
 {
@@ -50,6 +51,7 @@ static struct lcp_option_handler_t mru_opt_hnd=
 	.recv_conf_rej = mru_recv_conf_rej,
 	.free = mru_free,
 	.print = mru_print,
+	.apply_up = mru_apply_up
 };
 
 static struct lcp_option_t *mru_init(struct ppp_lcp_t *lcp)
@@ -77,6 +79,11 @@ static void mru_free(struct ppp_lcp_t *lcp, struct lcp_option_t *opt)
 	struct mru_option_t *mru_opt = container_of(opt, typeof(*mru_opt), opt);
 
 	_free(mru_opt);
+}
+
+static int mru_apply_up(struct ppp_lcp_t *lcp, struct lcp_option_t *opt)
+{
+	return 0;
 }
 
 static int mru_send_conf_req(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, uint8_t *ptr)

@@ -109,6 +109,7 @@ struct lcp_option_handler_t
 	int (*recv_conf_ack)(struct ppp_lcp_t*,struct lcp_option_t*,uint8_t*);
 	void (*free)(struct ppp_lcp_t*,struct lcp_option_t*);
 	void (*print)(void (*print)(const char *fmt,...), struct lcp_option_t*,uint8_t*);
+	int (*apply_up)(struct ppp_lcp_t*,struct lcp_option_t*);
 };
 
 struct ppp_lcp_t

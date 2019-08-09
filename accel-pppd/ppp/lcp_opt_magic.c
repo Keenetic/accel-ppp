@@ -16,6 +16,7 @@ static int magic_recv_conf_req(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, 
 static int magic_recv_conf_rej(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, uint8_t *ptr);
 static int magic_recv_conf_nak(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, uint8_t *ptr);
 static void magic_print(void (*print)(const char *fmt, ...), struct lcp_option_t*, uint8_t *ptr);
+static int magic_apply_up(struct ppp_lcp_t *lcp, struct lcp_option_t *opt);
 
 struct magic_option_t
 {
@@ -33,6 +34,7 @@ static struct lcp_option_handler_t magic_opt_hnd=
 	.recv_conf_nak = magic_recv_conf_nak,
 	.free = magic_free,
 	.print = magic_print,
+	.apply_up = magic_apply_up
 };
 
 static int nzmagic(int old)
@@ -65,6 +67,11 @@ static void magic_free(struct ppp_lcp_t *lcp, struct lcp_option_t *opt)
 	struct magic_option_t *magic_opt = container_of(opt,typeof(*magic_opt),opt);
 
 	_free(magic_opt);
+}
+
+static int magic_apply_up(struct ppp_lcp_t *lcp, struct lcp_option_t *opt)
+{
+	return 0;
 }
 
 static int magic_send_conf_req(struct ppp_lcp_t *lcp, struct lcp_option_t *opt, uint8_t *ptr)
