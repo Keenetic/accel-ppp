@@ -122,7 +122,7 @@ static void pap_timeout(struct triton_timer_t *t)
 	if (conf_ppp_verbose)
 		log_ppp_warn("pap: timeout\n");
 
-	ppp_auth_failed(d->ppp, NULL);
+	ppp_auth_failed(d->ppp, NULL, 0);
 }
 
 static int lcp_send_conf_req(struct ppp_t *ppp, struct auth_data_t *d, uint8_t *ptr)
@@ -170,13 +170,13 @@ static void pap_auth_result(struct pap_auth_data *p, int res)
 
 	p->peer_id = NULL;
 
-	if (res == PWDB_DENIED) {
+	if (res == PWDB_DENIED || res == PWDB_DENIED_SECOND) {
 		pap_send_nak(p, p->req_id);
 		if (p->started) {
 			ap_session_terminate(&p->ppp->ses, TERM_AUTH_ERROR, 0);
 			_free(peer_id);
 		} else
-			ppp_auth_failed(p->ppp, peer_id);
+			ppp_auth_failed(p->ppp, peer_id, (res == PWDB_DENIED_SECOND));
 	} else {
 		if (ppp_auth_succeeded(p->ppp, peer_id)) {
 			pap_send_nak(p, p->req_id);
@@ -266,7 +266,7 @@ static int pap_recv_req(struct pap_auth_data *p, struct pap_hdr *hdr)
 		_free(passwd2);
 	}
 
-	if (r == PWDB_DENIED) {
+	if (r == PWDB_DENIED || r == PWDB_DENIED_SECOND) {
 		goto failed;
 	} else {
 		if (ppp_auth_succeeded(p->ppp, peer_id)) {
@@ -290,7 +290,7 @@ failed:
 		ap_session_terminate(&p->ppp->ses, TERM_AUTH_ERROR, 0);
 		_free(peer_id);
 	} else
-		ppp_auth_failed(p->ppp, peer_id);
+		ppp_auth_failed(p->ppp, peer_id, (r == PWDB_DENIED_SECOND));
 
 	_free(passwd);
 

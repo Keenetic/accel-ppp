@@ -14,6 +14,7 @@ struct ap_session;
 #define PWDB_DENIED  1
 #define PWDB_WAIT 2
 #define PWDB_NO_IMPL 3
+#define PWDB_DENIED_SECOND 4
 
 typedef void (*pwdb_callback)(void *arg, int res);
 
