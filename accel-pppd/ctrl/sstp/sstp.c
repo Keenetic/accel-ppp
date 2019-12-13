@@ -870,7 +870,8 @@ static int http_send_response(struct sstp_conn_t *conn, char *proto, char *statu
 static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 {
 	char httpbuf[1024], linebuf[1024];
-	char *line, *method, *request, *proto, *host, *xff;
+	char *line, *method, *request, *proto, *host, *xff, *xsh;
+	char *hh = NULL, *snih = NULL;
 	struct buffer_t buf;
 	int host_error;
 	struct sockaddr_t addr, peer;
@@ -915,9 +916,33 @@ static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 
 		if (host_error < 0) {
 			host = http_getvalue(line, "Host", sizeof("Host") - 1);
-			if (host) {
+			if (host && hh == NULL) {
 				host = strsep(&host, ":");
 				host_error = (strcasecmp(host, conf_hostname) != 0);
+
+				if (host_error) {
+					log_ppp_error("HTTP request Host header <%s> doesn't match expected <%s>\n", host, conf_hostname);
+					log_ppp_error("Connection can be compromised\n");
+				}
+
+				hh = strdup(host);
+			} else
+			if (hh != NULL) {
+				log_ppp_error("Duplicating HTTP host header, aborting\n");
+				free(hh);
+				return -1;
+			}
+		}
+
+		if (conf_hostname) {
+			xsh = http_getvalue(line, "X-Sni-Host", sizeof("X-Sni-Host") - 1);
+			if (xsh && snih == NULL) {
+				snih = strdup(xsh);
+			} else
+			if (xsh && snih != NULL) {
+				log_ppp_error("Duplicating SNI header, aborting\n");
+				free(snih);
+				return -1;
 			}
 		}
 
@@ -968,17 +993,27 @@ static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 		}
 	}
 
+	if (conf_hostname) {
+		if (hh == NULL) {
+			log_ppp_error("Unable to detect HTTP host\n");
+		} else
+		if (snih == NULL) {
+			log_ppp_error("Unable to detect SNI hostname\n");
+		} else
+		if (strcasecmp(hh, snih)) {
+			log_ppp_error("HTTP request Host header <%s> doesn't match SSL SNI <%s>\n", hh, snih);
+			log_ppp_error("Connection can be compromised\n");
+		}
+	}
+
+	free(hh);
+	free(snih);
+
 	if (addr.u.sin.sin_addr.s_addr != 0 && peer.u.sin.sin_addr.s_addr != 0) {
 		memcpy(&conn->addr, &peer, sizeof(peer));
 
 		if (reset_peers_addrs(conn, &addr) != 0)
 			return -1;
-	}
-
-	if (host_error) {
-		if (conf_http_mode)
-			http_send_response(conn, proto, "404 Not Found", NULL);
-		return -1;
 	}
 
 	if (strcasecmp(method, SSTP_HTTP_METHOD) != 0 || strcasecmp(request, SSTP_HTTP_URI) != 0) {
