@@ -325,11 +325,10 @@ void __export ppp_auth_failed(struct ppp_t *ppp, char *username, int second_deni
 			_free(username);
 		ppp->ses.terminate_cause = TERM_AUTH_ERROR;
 		pthread_rwlock_unlock(&ses_lock);
-		log_ppp_info1("%s: authentication failed\n", ppp->ses.username);
-		log_info1("%s: authentication failed\n", ppp->ses.username);
+		log_ppp_error("%s: authentication failed\n", ppp->ses.username);
 		triton_event_fire(EV_SES_AUTH_FAILED, ppp);
 	} else
-		log_ppp_info1("authentication failed\n");
+		log_ppp_error("authentication failed\n");
 
 	if (conf_bfd_port != 0 && !second_denied)
 		ndm_send_feedback(ppp->ses.ctrl->calling_station_id, conf_bfd_port);
