@@ -1708,7 +1708,7 @@ static int sstp_recv_msg_call_connected(struct sstp_conn_t *conn, struct sstp_ct
 		HMAC(evp, md, mdlen, (void *)&buf, sizeof(buf), buf.attr.compound_mac, &len);
 
 		if (memcmp(msg->attr.compound_mac, buf.attr.compound_mac, len) != 0) {
-			log_ppp_error("sstp: invalid Compound MAC");
+			log_ppp_error("sstp: invalid Compound MAC\n");
 			return sstp_abort(conn, 0);
 		}
 	}
