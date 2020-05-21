@@ -874,6 +874,7 @@ static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 	char *hh = NULL, *snih = NULL;
 	struct buffer_t buf;
 	int host_error;
+	int from_uds = 0;
 	struct sockaddr_t addr, peer;
 
 	memset(&addr, 0, sizeof(addr));
@@ -966,9 +967,17 @@ static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 			if (conf_verbose)
 				log_ppp_info2("recv [HTTP X-Forwarded-From <%s>]\n", xff);
 
-			if (inet_pton(AF_INET, xff, &addr.u.sin.sin_addr) <= 0 && conf_verbose)
+			if (inet_pton(AF_INET, xff, &addr.u.sin.sin_addr) <= 0)
 			{
-				log_ppp_error("recv [HTTP X-Forwarded-From invalid format]\n");
+				if( !strcmp(xff, "unix") )
+				{
+					from_uds = 1;
+
+				} else
+				if( conf_verbose )
+				{
+					log_ppp_error("recv [HTTP X-Forwarded-From invalid format]\n");
+				}
 			}
 		}
 
@@ -982,14 +991,16 @@ static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 			peer.u.sin.sin_port = htons(atoi(xff));
 		}
 
-		xff = http_getvalue(line, "X-Forwarded-From-Port", sizeof("X-Forwarded-From-Port") - 1);
-		if (xff) {
-			xff = strsep(&xff, ":");
+		if (!from_uds) {
+			xff = http_getvalue(line, "X-Forwarded-From-Port", sizeof("X-Forwarded-From-Port") - 1);
+			if (xff) {
+				xff = strsep(&xff, ":");
 
-			if (conf_verbose)
-				log_ppp_info2("recv [HTTP X-Forwarded-From-Port <%s>]\n", xff);
+				if (conf_verbose)
+					log_ppp_info2("recv [HTTP X-Forwarded-From-Port <%s>]\n", xff);
 
-			addr.u.sin.sin_port = htons(atoi(xff));
+				addr.u.sin.sin_port = htons(atoi(xff));
+			}
 		}
 	}
 
@@ -1009,8 +1020,14 @@ static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 	free(hh);
 	free(snih);
 
-	if (addr.u.sin.sin_addr.s_addr != 0 && peer.u.sin.sin_addr.s_addr != 0) {
+	if ((addr.u.sin.sin_addr.s_addr != 0 || from_uds) &&
+		 peer.u.sin.sin_addr.s_addr != 0) {
 		memcpy(&conn->addr, &peer, sizeof(peer));
+
+		if (from_uds) {
+			addr.u.sin.sin_family = AF_INET;
+			addr.u.sin.sin_addr.s_addr = htonl(0x7f000001);
+		}
 
 		if (reset_peers_addrs(conn, &addr) != 0)
 			return -1;
