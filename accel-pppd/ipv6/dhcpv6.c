@@ -279,7 +279,9 @@ static void dhcpv6_send_reply(struct dhcpv6_packet *req, struct dhcpv6_pd *pd, i
 					opt2 = dhcpv6_nested_option_alloc(reply, opt1, D6_OPTION_IAADDR, sizeof(*ia_addr) - sizeof(struct dhcpv6_opt_hdr));
 					ia_addr = (struct dhcpv6_opt_ia_addr *)opt2->hdr;
 
-					build_ip6_addr(a, ses->ipv6->peer_intf_id, &ia_addr->addr);
+					addr = ia_addr->addr;
+					build_ip6_addr(a, ses->ipv6->peer_intf_id, &addr);
+					ia_addr->addr = addr;
 
 					ia_addr->pref_lifetime = htonl(conf_pref_lifetime);
 					ia_addr->valid_lifetime = htonl(conf_valid_lifetime);

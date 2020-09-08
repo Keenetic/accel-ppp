@@ -2429,13 +2429,14 @@ static int sstp_connect(struct triton_md_handler_t *h)
 {
 	struct sstp_conn_t *conn;
 	struct sockaddr_t addr;
+	socklen_t addrlen;
 	char addr_buf[ADDRSTR_MAXLEN];
 	in_addr_t ip;
 	int sock, value;
 
 	while (1) {
-		addr.len = sizeof(addr.u);
-		sock = accept(h->fd, &addr.u.sa, &addr.len);
+		addrlen = sizeof(addr.u);
+		sock = accept(h->fd, &addr.u.sa, &addrlen);
 		if (sock < 0) {
 			if (errno == EAGAIN)
 				return 0;
@@ -2457,6 +2458,8 @@ static int sstp_connect(struct triton_md_handler_t *h)
 			close(sock);
 			continue;
 		}
+
+		addr.len = addrlen;
 
 		ip = conf_proxyproto ? INADDR_ANY : sockaddr_ipv4(&addr);
 		if (ip && triton_module_loaded("connlimit") && connlimit_check(cl_key_from_ipv4(ip))) {
@@ -2563,8 +2566,9 @@ static int sstp_connect(struct triton_md_handler_t *h)
 		memset(conn->ctrl.calling_station_id, 0, ADDRSTR_MAXLEN + 1);
 		strncpy(conn->ctrl.calling_station_id, addr_buf, ADDRSTR_MAXLEN);
 
-		addr.len = sizeof(addr.u);
-		getsockname(sock, &addr.u.sa, &addr.len);
+		addrlen = sizeof(addr.u);
+		getsockname(sock, &addr.u.sa, &addrlen);
+		addr.len = addrlen;
 		sockaddr_ntop(&addr, addr_buf, sizeof(addr_buf), FLAG_NOPORT);
 		conn->ctrl.called_station_id = _malloc(ADDRSTR_MAXLEN + 1);
 		memset(conn->ctrl.called_station_id, 0, ADDRSTR_MAXLEN + 1);
@@ -3038,7 +3042,6 @@ static void sstp_init(void)
 {
 	struct sockaddr_t *addr = &serv.addr;
 	struct linger linger;
-	struct stat st;
 	int port, value;
 	char *opt;
 
