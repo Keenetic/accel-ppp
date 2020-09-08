@@ -48,7 +48,7 @@ ELSE (EXISTS ${CMAKE_HOME_DIRECTORY}/.git AND NOT IGNORE_GIT)
 ENDIF (EXISTS ${CMAKE_HOME_DIRECTORY}/.git AND NOT IGNORE_GIT)
 
 # we must include cpack.cmake after generating the ACCEL_PPP_VERSION variable
-include(cmake/cpack.cmake)
+#include(cmake/cpack.cmake)
 
 ADD_DEFINITIONS(-DACCEL_PPP_VERSION="${ACCEL_PPP_VERSION}")
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
