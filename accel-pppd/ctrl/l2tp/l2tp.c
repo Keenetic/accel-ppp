@@ -848,12 +848,14 @@ out_err:
 	return -1;
 }
 
+typedef void (*free_fn_t)(void *);
+
 static void l2tp_tunnel_free_sessions(struct l2tp_conn_t *conn)
 {
 	void *sessions = conn->sessions;
 
 	conn->sessions = NULL;
-	tdestroy(sessions, (__free_fn_t)l2tp_session_free);
+	tdestroy(sessions, (free_fn_t)l2tp_session_free);
 	/* Let l2tp_session_free() handle the session counter and
 	 * the reference held by the tunnel.
 	 */
