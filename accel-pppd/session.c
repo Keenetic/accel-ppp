@@ -26,6 +26,10 @@
 #include "mempool.h"
 #include "memdebug.h"
 
+#ifndef __GLIBC__
+#include <bits/reg.h> /* __WORDSIZE */
+#endif
+
 #define SID_SOURCE_SEQ 0
 #define SID_SOURCE_URANDOM 1
 
