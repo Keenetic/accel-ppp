@@ -3064,7 +3064,16 @@ static void sstp_init(void)
 		addr->u.sin6.sin6_family = AF_INET6;
 		addr->u.sin6.sin6_port = htons(port);
 	} else {
-		addr->len = sizeof(addr->u.sin);		
+		if (opt) {
+			char *prt = strchr(opt, ':');
+
+			if (prt && ((uintptr_t)prt > (uintptr_t)opt) && atoi(prt + 1) > 0) {
+				port = atoi(prt + 1);
+				*prt = '\0';
+			}
+		}
+
+		addr->len = sizeof(addr->u.sin);
 		addr->u.sin.sin_family = AF_INET;
 		if (!opt || inet_pton(AF_INET, opt, &addr->u.sin.sin_addr) <= 0)
 			addr->u.sin.sin_addr.s_addr = htonl(INADDR_ANY);
