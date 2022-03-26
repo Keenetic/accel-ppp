@@ -24,6 +24,7 @@
 enum {
 	SSTP_DATA_PACKET = 0x00,
 	SSTP_CTRL_PACKET = 0x01,
+	SSTP_DATA_ETHER_PACKET = 0xfe
 };
 
 /* Message Type */
@@ -166,6 +167,12 @@ struct sstp_attrib_crypto_binding_request {
 #define INIT_SSTP_DATA_HDR(hdr, len) {		\
 	(hdr)->version = SSTP_VERSION;		\
 	(hdr)->reserved = SSTP_DATA_PACKET;	\
+	(hdr)->length = htons(len);		\
+}
+
+#define INIT_SSTP_DATA_ETHER_HDR(hdr, len) {		\
+	(hdr)->version = SSTP_VERSION;		\
+	(hdr)->reserved = SSTP_DATA_ETHER_PACKET;	\
 	(hdr)->length = htons(len);		\
 }
 

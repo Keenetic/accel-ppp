@@ -11,13 +11,18 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <net/if.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <sys/un.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <linux/sockios.h>
+#include <linux/if_bridge.h>
 #include "linux_ppp.h"
+
+#include <linux/if_tun.h>
 
 #ifdef CRYPTO_OPENSSL
 #include <openssl/ssl.h>
@@ -52,6 +57,8 @@
 #define PPP_BUF_IOVEC	256
 #define PPP_F_ESCAPE	1
 #define PPP_F_TOSS	2
+
+#define ETH_F_LEN	1522
 
 #ifndef SHA_DIGEST_LENGTH
 #define SHA_DIGEST_LENGTH 20
@@ -115,7 +122,7 @@ struct sstp_stream_t {
 
 struct sstp_conn_t {
 	struct triton_context_t ctx;
-	struct triton_md_handler_t hnd, ppp_hnd;
+	struct triton_md_handler_t hnd, ppp_hnd, eth_hnd;
 
 	struct triton_timer_t timeout_timer;
 	struct triton_timer_t hello_timer;
@@ -141,6 +148,9 @@ struct sstp_conn_t {
 	int ppp_flags;
 	struct buffer_t *ppp_in;
 	struct list_head ppp_queue;
+
+	struct list_head eth_out_queue;
+	int eth_tap_requested;
 
 	struct sockaddr_t addr;
 	struct ppp_t ppp;
@@ -187,6 +197,7 @@ static const char *conf_hostname = NULL;
 static int conf_http_mode = -1;
 static const char *conf_http_url = NULL;
 static int conf_proxyarp = 0;
+static const char *conf_bridge = NULL;
 
 static mempool_t conn_pool;
 
@@ -1013,6 +1024,16 @@ static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 				addr.u.sin.sin_port = htons(atoi(xff));
 			}
 		}
+
+		xff = http_getvalue(line, "X-Ethernet", sizeof("X-Ethernet") - 1);
+		if (xff) {
+			xff = strsep(&xff, ":");
+
+			if (conf_verbose)
+				log_ppp_info2("recv [HTTP X-Ethernet <%s>]\n", xff);
+
+			conn->eth_tap_requested = conf_bridge && !strcasecmp(xff, "true");
+		}
 	}
 
 	if (conf_hostname) {
@@ -1056,8 +1077,12 @@ static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 		return -1;
 	}
 
-	return http_send_response(conn, proto, "200 OK",
-			"Content-Length: 18446744073709551615\r\n");
+	char* h =
+		conn->eth_tap_requested ?
+			"Content-Length: 18446744073709551615\r\nX-Ethernet: true\r\n" :
+			"Content-Length: 18446744073709551615\r\n";
+
+	return http_send_response(conn, proto, "200 OK", h);
 }
 
 static int http_handler(struct sstp_conn_t *conn, struct buffer_t *buf)
@@ -1406,6 +1431,116 @@ static int ppp_send(struct sstp_conn_t *conn, struct buffer_t *buf)
 {
 	ppp_queue(conn, buf);
 	triton_md_enable_handler(&conn->ppp_hnd, MD_MODE_WRITE);
+	return 0;
+}
+
+/* TAP */
+
+static int eth_tap_read(struct triton_md_handler_t *h)
+{
+	struct sstp_conn_t *conn = container_of(h, typeof(*conn), eth_hnd);
+	struct sstp_hdr *hdr;
+
+	while (1) {
+		struct buffer_t *buf = alloc_buf(ETH_F_LEN + sizeof(*hdr));
+
+		if (!buf) {
+			log_ppp_error("sstp: eth: no memory\n");
+			goto drop;
+		}
+
+		const ssize_t n = read(h->fd, buf_pull(buf, sizeof(*hdr)), ETH_F_LEN);
+		if (n < 0) {
+			if (errno == EINTR) {
+				free_buf(buf);
+				continue;
+			}
+			if (errno == EAGAIN) {
+				free_buf(buf);
+				break;
+			}
+			log_ppp_error("sstp: eth: read: %s\n", strerror(errno));
+			free_buf(buf);
+			goto drop;
+		} else if (n == 0) {
+			if (conf_verbose)
+				log_ppp_info2("sstp: eth: disconnect from tun/tap\n");
+			free_buf(buf);
+			goto drop;
+		}
+
+		if (conn->sstp_state != STATE_SERVER_CALL_CONNECTED) {
+			free_buf(buf);
+			break;
+		}
+
+		buf_set_length(buf, n);
+		hdr = buf_push(buf, sizeof(*hdr));
+		INIT_SSTP_DATA_ETHER_HDR(hdr, buf->len);
+		sstp_queue(conn, buf);
+	}
+
+	if (!list_empty(&conn->out_queue))
+		triton_md_enable_handler(&conn->hnd, MD_MODE_WRITE);
+
+	return 0;
+
+drop:
+	sstp_disconnect(conn);
+	return 1;
+}
+
+static int eth_tap_write(struct triton_md_handler_t *h)
+{
+	struct sstp_conn_t *conn = container_of(h, typeof(*conn), eth_hnd);
+
+	while (!list_empty(&conn->eth_out_queue)) {
+		struct buffer_t *buf =
+			list_first_entry(&conn->eth_out_queue, typeof(*buf), entry);
+		const ssize_t n = write(conn->eth_hnd.fd, buf->data, buf->len);
+
+		if (n < 0) {
+			if (errno == EINTR)
+				goto defer;
+			if (errno == EAGAIN)
+				goto defer;
+			if (conf_verbose && errno != EPIPE)
+				log_ppp_info2("sstp: eth: write: %s\n", strerror(errno));
+			goto drop;
+		} else if (n == 0)
+			goto defer;
+
+		if (n != buf->len)
+			log_ppp_info2("sstp: eth: truncated frame");
+
+		list_del(&buf->entry);
+		free_buf(buf);
+	}
+
+	if (!list_empty(&conn->eth_out_queue))
+		goto defer;
+
+	triton_md_disable_handler(h, MD_MODE_WRITE);
+	return 0;
+
+defer:
+	triton_md_enable_handler(h, MD_MODE_WRITE);
+	return 0;
+
+drop:
+	triton_context_call(&conn->ctx, (triton_event_func)sstp_disconnect, conn);
+	return 1;
+}
+
+static inline void eth_tap_queue(struct sstp_conn_t *conn, struct buffer_t *buf)
+{
+	list_add_tail(&buf->entry, &conn->eth_out_queue);
+}
+
+static int eth_tap_send(struct sstp_conn_t *conn, struct buffer_t *buf)
+{
+	eth_tap_queue(conn, buf);
+	triton_md_enable_handler(&conn->eth_hnd, MD_MODE_WRITE);
 	return 0;
 }
 
@@ -1808,7 +1943,122 @@ static int sstp_recv_msg_call_connected(struct sstp_conn_t *conn, struct sstp_ct
 		triton_timer_add(&conn->ctx, &conn->hello_timer, 0);
 	}
 
+	if (conn->eth_tap_requested) {
+		if (conf_verbose)
+			log_ppp_info2("enabling Ethernet mode\n");
+
+		conn->eth_hnd.fd = open("/dev/net/tun", O_RDWR);
+
+		if (conn->eth_hnd.fd < 0) {
+			conn->eth_hnd.fd = -1;
+			log_ppp_error("failed to open TAP device: %s\n", strerror(errno));
+			return -1;
+		}
+
+		struct ifreq ifr;
+
+		memset(&ifr, 0, sizeof(ifr));
+		ifr.ifr_flags = IFF_NO_PI | IFF_TAP;
+
+		if (ioctl(conn->eth_hnd.fd, TUNSETIFF, (void *) &ifr) < 0) {
+			log_ppp_error("failed to setup TAP device: %s\n", strerror(errno));
+			goto cleanup;
+		}
+
+		if (conf_verbose)
+			log_ppp_info2("new TAP device is '%s'\n", ifr.ifr_name);
+
+		char port[IFNAMSIZ + 1];
+
+		snprintf(port, IFNAMSIZ, "%s", ifr.ifr_name);
+
+		int value = fcntl(conn->eth_hnd.fd, F_GETFL);
+		if (value < 0 || fcntl(conn->eth_hnd.fd, F_SETFL, value | O_NONBLOCK) < 0) {
+			log_ppp_error("failed to set nonblocking mode: %s\n", strerror(errno));
+			goto cleanup;
+		}
+
+		const int idx = if_nametoindex(port);
+
+		if (idx == 0) {
+			log_ppp_error("unable to get ifindex for '%s'\n", port);
+			goto cleanup;
+		}
+
+		memset(&ifr, 0, sizeof(ifr));
+		snprintf(ifr.ifr_name, IFNAMSIZ, "%s", conf_bridge);
+		ifr.ifr_ifindex = idx;
+
+		int cfd = socket(AF_INET, SOCK_STREAM, 0);
+
+		if (cfd < 0) {
+			log_ppp_error("unable to open control socket: %s\n", strerror(cfd));
+			goto cleanup;
+		}
+
+		if (ioctl(cfd, SIOCBRADDIF, &ifr) < 0) {
+			log_ppp_error("unable to add iface '%s' to bridge '%s': %s\n",
+				port, conf_bridge, strerror(errno));
+			close(cfd);
+			goto cleanup;
+		}
+
+		char brport[32 + IFNAMSIZ * 2];
+
+		snprintf(brport, sizeof(brport), "/sys/class/net/%s/brif/%s/stp_choke",
+			conf_bridge, port);
+
+		int ffd = open(brport, O_WRONLY);
+
+		if (ffd < 0) {
+			log_ppp_error("unable to open control of '%s' in bridge '%s': %s\n",
+				port, conf_bridge, strerror(errno));
+			close(cfd);
+			goto cleanup;
+		}
+
+		if (write(ffd, "1", 1) != 1) {
+			log_ppp_error("unable to write control of '%s' in bridge '%s': %s\n",
+				port, conf_bridge, strerror(errno));
+			close(cfd);
+			close(ffd);
+			goto cleanup;
+		}
+
+		close(ffd);
+
+		memset(&ifr, 0, sizeof(ifr));
+		snprintf(ifr.ifr_name, IFNAMSIZ, "%s", port);
+
+		if (ioctl(cfd, SIOCGIFFLAGS, &ifr) < 0) {
+			log_ppp_error("unable get interface '%s' flags: %s\n",
+				port, strerror(errno));
+			close(cfd);
+			goto cleanup;
+		}
+
+		ifr.ifr_flags |= IFF_UP;
+
+		if (ioctl(cfd, SIOCSIFFLAGS, &ifr) < 0) {
+			log_ppp_error("unable to bring interface '%s' up: %s\n",
+				port, strerror(errno));
+			close(cfd);
+			goto cleanup;
+		}
+
+		close(cfd);
+		triton_md_register_handler(&conn->ctx, &conn->eth_hnd);
+		triton_md_enable_handler(&conn->eth_hnd, MD_MODE_READ);
+	}
+
 	return 0;
+
+cleanup:
+
+	close(conn->eth_hnd.fd);
+	conn->eth_hnd.fd = -1;
+
+	return -1;
 }
 
 static int sstp_recv_msg_call_abort(struct sstp_conn_t *conn)
@@ -2001,6 +2251,56 @@ static int sstp_recv_data_packet(struct sstp_conn_t *conn, struct sstp_hdr *hdr)
 	return ppp_send(conn, buf);
 }
 
+static int sstp_recv_data_ether_packet(struct sstp_conn_t *conn, struct sstp_hdr *hdr)
+{
+	int size;
+
+	if (conn->sstp_state != STATE_SERVER_CALL_CONNECTED)
+		return 0;
+
+	if (!conn->eth_tap_requested) {
+		log_error("sstp: got ether packet before negotiation");
+		return 0;
+	}
+
+	size = ntohs(hdr->length) - sizeof(*hdr);
+	if (size == 0)
+		return 0;
+
+	const ssize_t n = write(conn->eth_hnd.fd, hdr->data, size);
+	const int err = errno;
+
+	if (n < 0) {
+		if (err == EINTR)
+			return 0;
+		if (err == EAGAIN)
+			goto defer;
+		if (err == EIO) {
+			if (conf_verbose)
+				log_ppp_info2("sstp: eth: write: TAP is down\n");
+
+			return 0;
+		}
+		if (conf_verbose && err != EPIPE)
+			log_ppp_info2("sstp: eth: write: %s\n", strerror(err));
+		return -1;
+	}
+
+	return 0;
+
+defer:
+
+	struct buffer_t *buf = alloc_buf(size);
+	if (!buf) {
+		log_error("sstp: no memory\n");
+		return -1;
+	}
+
+	buf_put_data(buf, hdr->data, size);
+
+	return eth_tap_send(conn, buf);
+}
+
 static int sstp_recv_packet(struct sstp_conn_t *conn, struct sstp_hdr *hdr)
 {
 	struct sstp_ctrl_hdr *msg = (struct sstp_ctrl_hdr *)hdr;
@@ -2008,6 +2308,8 @@ static int sstp_recv_packet(struct sstp_conn_t *conn, struct sstp_hdr *hdr)
 	switch (hdr->reserved) {
 	case SSTP_DATA_PACKET:
 		return sstp_recv_data_packet(conn, hdr);
+	case SSTP_DATA_ETHER_PACKET:
+		return sstp_recv_data_ether_packet(conn, hdr);
 	case SSTP_CTRL_PACKET:
 		if (ntohs(hdr->length) >= sizeof(*msg))
 			break;
@@ -2355,6 +2657,11 @@ static void sstp_disconnect(struct sstp_conn_t *conn)
 	if (conn->ppp_hnd.tpd)
 		triton_md_unregister_handler(&conn->ppp_hnd, 1);
 
+	if (conn->eth_hnd.tpd) {
+		triton_md_unregister_handler(&conn->eth_hnd, 0);
+		close(conn->eth_hnd.fd);
+	}
+
 	switch (conn->ppp_state) {
 	case STATE_INIT:
 		__sync_sub_and_fetch(&stat_starting, 1);
@@ -2535,6 +2842,10 @@ static int sstp_connect(struct triton_md_handler_t *h)
 		INIT_LIST_HEAD(&conn->ppp_queue);
 		INIT_LIST_HEAD(&conn->deferred_queue);
 		memcpy(&conn->addr, &addr, sizeof(conn->addr));
+
+		INIT_LIST_HEAD(&conn->eth_out_queue);
+		conn->eth_hnd.read = eth_tap_read;
+		conn->eth_hnd.write = eth_tap_write;
 
 		conn->ctrl.ctx = &conn->ctx;
 		conn->ctrl.started = ppp_started;
@@ -2933,6 +3244,7 @@ static void load_config(void)
 		conf_verbose = atoi(opt) > 0;
 
 	conf_hostname = conf_get_opt("sstp", "host-name");
+	conf_bridge = conf_get_opt("sstp", "bridge");
 
 	opt = conf_get_opt("sstp", "http-error");
 	if (opt) {
