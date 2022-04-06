@@ -238,6 +238,7 @@ static int pap_recv_req(struct pap_auth_data *p, struct pap_hdr *hdr)
 		}
 		pap_send_ack(p, hdr->id);
 		p->started = 1;
+		p->ppp->ses.pppoe_passwd = _strndup((const char*)ptr, passwd_len);
 		return 0;
 	}
 

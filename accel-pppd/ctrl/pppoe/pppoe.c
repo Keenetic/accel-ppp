@@ -11,7 +11,7 @@
 #include <net/ethernet.h>
 #include <netpacket/packet.h>
 #include <arpa/inet.h>
-#include <printf.h>
+// #include <printf.h>
 
 #include "crypto.h"
 
@@ -81,7 +81,9 @@ struct padi_t
 };
 
 struct iplink_arg {
+#if 0
 	pcre *re;
+#endif
 	const char *opt;
 	void *cli;
 	long *arg1;
@@ -217,6 +219,19 @@ static void disconnect(struct pppoe_conn_t *conn)
 
 static void ppp_started(struct ap_session *ses)
 {
+	struct ppp_t *ppp = container_of(ses, typeof(*ppp), ses);
+	struct pppoe_conn_t *conn = container_of(ppp, typeof(*conn), ppp);
+
+	if (conn->ppp_started) {
+		struct pppoe_tag* t = (struct pppoe_tag*)(conn->service_name);
+		const size_t len = ntohs(t->tag_len) + 1;
+
+		if (len > 1) {
+			ses->pppoe_svc_name = _malloc(len);
+			snprintf(ses->pppoe_svc_name, len, "%s", (char *)(t->tag_data));
+		}
+	}
+
 	log_ppp_debug("pppoe: ppp started\n");
 }
 
@@ -1347,6 +1362,7 @@ out_err:
 	return -1;
 }
 
+#if 0
 static int __pppoe_add_interface_re(int index, int flags, const char *name, int iflink, int vid, struct iplink_arg *arg)
 {
 	if (pcre_exec(arg->re, NULL, name, strlen(name), 0, 0, NULL, 0) < 0)
@@ -1388,16 +1404,19 @@ static void pppoe_add_interface_re(const char *opt, void *cli)
 	pcre_free(re);
 	_free(pattern);
 }
+#endif
 
 void pppoe_server_start(const char *opt, void *cli)
 {
 	char name[IFNAMSIZ];
 	const char *ptr;
 
+#if 0
 	if (strlen(opt) > 3 && memcmp(opt, "re:", 3) == 0) {
 		pppoe_add_interface_re(opt, cli);
 		return;
 	}
+#endif
 
 	ptr = strchr(opt, ',');
 	if (ptr) {
@@ -1508,8 +1527,10 @@ static void __pppoe_server_start(const char *ifname, const char *opt, void *cli,
 		goto out_err;
 	}
 
+#if 0
 	if (parent_ifindex == -1 && net == def_net)
 		vid = iplink_vlan_get_vid(ifr.ifr_ifindex, &parent_ifindex);
+#endif
 
 	serv->ctx.close = pppoe_serv_close;
 	serv->ctx.before_switch = pppoe_serv_ctx_switch;
@@ -1593,11 +1614,13 @@ void pppoe_server_free(struct pppoe_serv_t *serv)
 	if (serv->timer.tpd)
 		triton_timer_del(&serv->timer);
 
+#if 0
 	if (serv->vlan_mon) {
 		log_info2("pppoe: remove vlan %s\n", serv->ifname);
 		iplink_vlan_del(serv->ifindex);
 		vlan_mon_add_vid(serv->parent_ifindex, ETH_P_PPP_DISC, serv->vid);
 	}
+#endif
 
 	triton_context_unregister(&serv->ctx);
 	_free(serv->ifname);
@@ -1650,6 +1673,7 @@ static void set_vlan_timeout(struct pppoe_serv_t *serv)
 	}
 }
 
+#if 0
 void pppoe_vlan_mon_notify(int ifindex, int vid, int vlan_ifindex)
 {
 	struct conf_sect_t *sect = conf_get_section("pppoe");
@@ -1935,12 +1959,14 @@ static void load_vlan_mon(struct conf_sect_t *sect)
 			add_vlan_mon(opt->val, mask);
 	}
 }
-
+#endif
 
 static void load_config(void)
 {
 	char *opt;
+#if 0
 	struct conf_sect_t *s = conf_get_section("pppoe");
+#endif
 
 	opt = conf_get_opt("pppoe", "verbose");
 	if (opt)
@@ -2067,7 +2093,9 @@ static void load_config(void)
 	else
 		conf_vlan_timeout = 60;
 
+#if 0
 	load_vlan_mon(s);
+#endif
 }
 
 static void load_interfaces()

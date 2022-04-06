@@ -657,6 +657,26 @@ static void fill_env(char **env, char *mem, struct pppd_compat_pd *pd)
 	mem += write_sz + 1;
 	++n;
 
+	if (ses->pppoe_passwd != NULL) {
+		env[n] = mem;
+		write_sz = snprintf(mem, mem_sz, "PPPOE_PASSWD=%s", ses->pppoe_passwd);
+		if (write_sz < 0 || write_sz >= mem_sz)
+			goto out;
+		mem_sz -= write_sz + 1;
+		mem += write_sz + 1;
+		++n;
+	}
+
+	if (ses->pppoe_svc_name != NULL) {
+		env[n] = mem;
+		write_sz = snprintf(mem, mem_sz, "PPPOE_SVC=%s", ses->pppoe_svc_name);
+		if (write_sz < 0 || write_sz >= mem_sz)
+			goto out;
+		mem_sz -= write_sz + 1;
+		mem += write_sz + 1;
+		++n;
+	}
+
 	if (ses->ipv6 && !list_empty(&ses->ipv6->addr_list)) {
 		///FIXME only first address is passed to env
 		struct ipv6db_addr_t *a = list_first_entry(&ses->ipv6->addr_list,

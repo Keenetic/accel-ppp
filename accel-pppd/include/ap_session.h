@@ -121,6 +121,9 @@ struct ap_session
 	uint32_t acct_rx_bytes_i;
 	uint32_t acct_tx_bytes_i;
 	int acct_start;
+
+	const char *pppoe_passwd;
+	char *pppoe_svc_name;
 };
 
 struct ap_session_stat
