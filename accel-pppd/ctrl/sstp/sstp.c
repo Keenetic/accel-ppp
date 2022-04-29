@@ -2049,6 +2049,8 @@ static int sstp_recv_msg_call_connected(struct sstp_conn_t *conn, struct sstp_ct
 		close(cfd);
 		triton_md_register_handler(&conn->ctx, &conn->eth_hnd);
 		triton_md_enable_handler(&conn->eth_hnd, MD_MODE_READ);
+
+		conn->ppp.ses.ethernet = 1;
 	}
 
 	return 0;

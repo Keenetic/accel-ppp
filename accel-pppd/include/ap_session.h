@@ -101,6 +101,7 @@ struct ap_session
 
 	struct triton_context_t *wakeup;
 
+	int ethernet:1;
 	int terminating:1;
 	int terminated:1;
 	int down:1;

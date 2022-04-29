@@ -677,6 +677,16 @@ static void fill_env(char **env, char *mem, struct pppd_compat_pd *pd)
 		++n;
 	}
 
+	if (ses->ethernet) {
+		env[n] = mem;
+		write_sz = snprintf(mem, mem_sz, "ETHERNET=1");
+		if (write_sz < 0 || write_sz >= mem_sz)
+			goto out;
+		mem_sz -= write_sz + 1;
+		mem += write_sz + 1;
+		++n;
+	}
+
 	if (ses->ipv6 && !list_empty(&ses->ipv6->addr_list)) {
 		///FIXME only first address is passed to env
 		struct ipv6db_addr_t *a = list_first_entry(&ses->ipv6->addr_list,
