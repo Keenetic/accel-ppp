@@ -70,6 +70,11 @@
 #define ADDRSTR_MAXLEN (sizeof("unix:") + sizeof(((struct sockaddr_un *)0)->sun_path))
 #define FLAG_NOPORT 1
 
+#define SSTP_OUT_QUEUE_SIZE		1024
+#define SSTP_DEF_QUEUE_SIZE		1024
+#define SSTP_PPP_QUEUE_SIZE		1024
+#define SSTP_ETH_QUEUE_SIZE		1024
+
 enum {
 	STATE_INIT = 0,
 	STATE_STARTING,
@@ -142,14 +147,19 @@ struct sstp_conn_t {
 
 	struct buffer_t *in;
 	struct list_head out_queue;
+	size_t out_queue_size;
+
 	struct list_head deferred_queue;
+	size_t deferred_queue_size;
 
 	int ppp_state;
 	int ppp_flags;
 	struct buffer_t *ppp_in;
 	struct list_head ppp_queue;
+	size_t ppp_queue_size;
 
 	struct list_head eth_out_queue;
+	size_t eth_out_queue_size;
 	int eth_tap_requested;
 
 	struct sockaddr_t addr;
@@ -1403,6 +1413,7 @@ static int ppp_write(struct triton_md_handler_t *h)
 				break;
 			}
 			n -= buf->len;
+			conn->ppp_queue_size--;
 			list_del(&buf->entry);
 			free_buf(buf);
 		} while (n > 0);
@@ -1424,7 +1435,16 @@ drop:
 
 static inline void ppp_queue(struct sstp_conn_t *conn, struct buffer_t *buf)
 {
+	if (conn->ppp_queue_size > SSTP_PPP_QUEUE_SIZE) {
+		if (conf_verbose)
+			log_ppp_info2("sstp: ppp_queue is overloaded, drop\n");
+
+		free_buf(buf);
+		return;
+	}
+
 	list_add_tail(&buf->entry, &conn->ppp_queue);
+	conn->ppp_queue_size++;
 }
 
 static int ppp_send(struct sstp_conn_t *conn, struct buffer_t *buf)
@@ -1513,6 +1533,7 @@ static int eth_tap_write(struct triton_md_handler_t *h)
 		if (n != buf->len)
 			log_ppp_info2("sstp: eth: truncated frame");
 
+		conn->eth_out_queue_size--;
 		list_del(&buf->entry);
 		free_buf(buf);
 	}
@@ -1534,7 +1555,16 @@ drop:
 
 static inline void eth_tap_queue(struct sstp_conn_t *conn, struct buffer_t *buf)
 {
+	if (conn->eth_out_queue_size > SSTP_ETH_QUEUE_SIZE) {
+		if (conf_verbose)
+			log_ppp_info2("sstp: eth_out_queue is overloaded, drop\n");
+
+		free_buf(buf);
+		return;
+	}
+
 	list_add_tail(&buf->entry, &conn->eth_out_queue);
+	conn->eth_out_queue_size++;
 }
 
 static int eth_tap_send(struct sstp_conn_t *conn, struct buffer_t *buf)
@@ -2415,7 +2445,16 @@ drop:
 
 static inline void sstp_queue_deferred(struct sstp_conn_t *conn, struct buffer_t *buf)
 {
+	if (conn->deferred_queue_size > SSTP_DEF_QUEUE_SIZE) {
+		if (conf_verbose)
+			log_ppp_info2("sstp: deferred_queue is overloaded, drop\n");
+
+		free_buf(buf);
+		return;
+	}
+
 	list_add_tail(&buf->entry, &conn->deferred_queue);
+	conn->deferred_queue_size++;
 }
 
 static int sstp_read_deferred(struct sstp_conn_t *conn)
@@ -2430,6 +2469,7 @@ static int sstp_read_deferred(struct sstp_conn_t *conn)
 		if (n < 0)
 			goto drop;
 
+		conn->deferred_queue_size--;
 		list_del(&buf->entry);
 		free_buf(buf);
 	}
@@ -2524,6 +2564,7 @@ static int sstp_write(struct triton_md_handler_t *h)
 				goto defer;
 			buf_pull(buf, n);
 		}
+		conn->out_queue_size--;
 		list_del(&buf->entry);
 		free_buf(buf);
 	}
@@ -2542,7 +2583,16 @@ drop:
 
 static inline void sstp_queue(struct sstp_conn_t *conn, struct buffer_t *buf)
 {
+	if (conn->out_queue_size > SSTP_OUT_QUEUE_SIZE) {
+		if (conf_verbose)
+			log_ppp_info2("sstp: out_queue is overloaded, drop\n");
+
+		free_buf(buf);
+		return;
+	}
+
 	list_add_tail(&buf->entry, &conn->out_queue);
+	conn->out_queue_size++;
 }
 
 static int sstp_send(struct sstp_conn_t *conn, struct buffer_t *buf)
@@ -2841,11 +2891,15 @@ static int sstp_connect(struct triton_md_handler_t *h)
 
 		conn->in = alloc_buf(SSTP_MAX_PACKET_SIZE*2);
 		INIT_LIST_HEAD(&conn->out_queue);
+		conn->out_queue_size = 0;
 		INIT_LIST_HEAD(&conn->ppp_queue);
+		conn->ppp_queue_size = 0;
 		INIT_LIST_HEAD(&conn->deferred_queue);
+		conn->deferred_queue_size = 0;
 		memcpy(&conn->addr, &addr, sizeof(conn->addr));
 
 		INIT_LIST_HEAD(&conn->eth_out_queue);
+		conn->eth_out_queue_size = 0;
 		conn->eth_hnd.read = eth_tap_read;
 		conn->eth_hnd.write = eth_tap_write;
 
