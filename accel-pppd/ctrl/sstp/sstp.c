@@ -871,17 +871,24 @@ static char *http_getvalue(char *line, const char *name, int len)
 static int http_send_response(struct sstp_conn_t *conn, char *proto, char *status, char *headers)
 {
 	char datetime[sizeof("aaa, dd bbb yyyy HH:MM:SS GMT")];
+	char padbuf[96];
+	const size_t padbuflen = 2 + rand() % (sizeof(padbuf) - 2);
 	char linebuf[1024], *line;
 	struct buffer_t *buf, tmp;
 	time_t now = time(NULL);
 
+	for (size_t i = 0; i < padbuflen - 1; ++i)
+		padbuf[i] = rand() % 26 + (rand() % 2 ? 'a' : 'A');
+
+	padbuf[padbuflen - 1] = '\0';
+
 	strftime(datetime, sizeof(datetime), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&now));
 	buf = alloc_buf_printf(
 		"%s %s\r\n"
-		/* "Server: %s\r\n" */
 		"Date: %s\r\n"
 		"%s"
-		"\r\n", proto, status, /* "accel-ppp",*/ datetime, headers ? : "");
+		"X-Padding: %s\r\n"
+		"\r\n", proto, status, datetime, headers ? : "", padbuf);
 	if (!buf) {
 		log_error("sstp: no memory\n");
 		return -1;
@@ -2606,20 +2613,27 @@ static void sstp_msg_echo(struct triton_timer_t *t)
 {
 	struct sstp_conn_t *conn = container_of(t, typeof(*conn), hello_timer);
 	struct ppp_idle idle;
+	const unsigned int hello_interval =
+		conn->hello_interval -
+		(conn->hello_interval >> 3) +
+		rand() % ((conn->hello_interval < 8) ? 1 : (conn->hello_interval >> 3));
 
 	switch (conn->sstp_state) {
 	case STATE_SERVER_CALL_CONNECTED:
 		if (ioctl(conn->ppp.unit_fd, PPPIOCGIDLE, &idle) >= 0 &&
-		    idle.recv_idle < conn->hello_interval) {
-			t->period = (conn->hello_interval - idle.recv_idle) * 1000;
+		    idle.recv_idle < hello_interval) {
+			t->period = (hello_interval - idle.recv_idle) * 1000;
 			triton_timer_mod(t, 0);
 			break;
 		}
 		if (conn->hello_sent++) {
 			log_ppp_warn("sstp: no echo reply\n");
 			sstp_abort(conn, 0);
-		} else
+		} else {
 			sstp_send_msg_echo_request(conn);
+			t->period = hello_interval * 1000;
+			triton_timer_mod(t, 0);
+		}
 		break;
 	}
 }
