@@ -554,6 +554,7 @@ static int l2tp_tunnel_clean_rtmsqueue(struct l2tp_conn_t *conn)
 {
 	struct l2tp_packet_t *pack;
 	unsigned int pkt_freed = 0;
+	const struct l2tp_attr_t *msg_type;
 
 	while (!list_empty(&conn->rtms_queue)) {
 		pack = list_first_entry(&conn->rtms_queue, typeof(*pack),
@@ -4174,6 +4175,9 @@ static int l2tp_tunnel_store_msg(struct l2tp_conn_t *conn,
 			l2tp_packet_print(pack, log_debug);
 		}
 
+		if (conn->hello_timer.tpd)
+			triton_timer_mod(&conn->hello_timer, 0);
+
 		return -1;
 	}
 
@@ -4238,6 +4242,7 @@ static int l2tp_tunnel_reply(struct l2tp_conn_t *conn, int need_ack)
 	uint16_t id = conn->recv_queue_offt;
 	unsigned int pkt_count = 0;
 	int res;
+	int reset_hello = 0;
 
 	/* Loop over reception queue, break as as soon as there is no more
 	 * message to process or if tunnel gets closed.
@@ -4268,6 +4273,8 @@ static int l2tp_tunnel_reply(struct l2tp_conn_t *conn, int need_ack)
 			l2tp_packet_free(pack);
 			continue;
 		}
+
+		++reset_hello;
 
 		/* ZLB aren't stored in the reception queue, so we're sure that
 		 * pack->attrs isn't an empty list.
@@ -4310,6 +4317,12 @@ static int l2tp_tunnel_reply(struct l2tp_conn_t *conn, int need_ack)
 
 		l2tp_packet_free(pack);
 	} while (id != conn->recv_queue_offt);
+
+	if (conn->hello_timer.tpd &&
+		conn->state != STATE_FIN &&
+		conn->state != STATE_FIN_WAIT &&
+		reset_hello)
+			triton_timer_mod(&conn->hello_timer, 0);
 
 	conn->recv_queue_offt = (conn->recv_queue_offt + pkt_count) % conn->recv_queue_sz;
 
