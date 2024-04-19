@@ -1082,7 +1082,8 @@ static int http_recv_request(struct sstp_conn_t *conn, uint8_t *data, int len)
 			return -1;
 	}
 
-	if (strcasecmp(method, SSTP_HTTP_METHOD) != 0 || strcasecmp(request, SSTP_HTTP_URI) != 0) {
+	if (strcasecmp(method, SSTP_HTTP_METHOD) != 0 ||
+		strncasecmp(request, SSTP_HTTP_URI, sizeof(SSTP_HTTP_URI) - 1) != 0) {
 		if (conf_http_mode > 0) {
 			if (_asprintf(&line, "Location: %s%s\r\n",
 			    conf_http_url, (conf_http_mode == 2) ? request : "") < 0)
