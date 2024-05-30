@@ -334,6 +334,7 @@ static void setup_mppe(struct rad_req_t *req, const uint8_t *challenge)
 	uint8_t mppe_send_key[16];
 	struct ev_mppe_keys_t ev_mppe = {
 		.ppp = container_of(req->rpd->ses, typeof(struct ppp_t), ses),
+		.policy = -1,
 	};
 
 	if (!req->rpd->ses->ctrl->ppp)
