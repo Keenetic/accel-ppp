@@ -23,7 +23,7 @@
 #include "sigchld.h"
 #include "iputils.h"
 
-#ifdef RADIUS
+#if 0
 #include "radius.h"
 #endif
 
@@ -55,7 +55,7 @@ struct pppd_compat_pd
 	struct list_head entry;
 	struct sigchld_handler_t hnd;
 	struct sigchld_handler_t ip_up_hnd;
-#ifdef RADIUS
+#if 0
 	char *tmp_fname;
 	int radattr_saved:1;
 #endif
@@ -68,7 +68,7 @@ struct pppd_compat_pd
 static struct pppd_compat_pd *find_pd(struct ap_session *ses);
 static void fill_argv(char **argv, struct pppd_compat_pd *pd, char *path);
 static void fill_env(char **env, char *mem, struct pppd_compat_pd *pd);
-#ifdef RADIUS
+#if 0
 static void remove_radattr(struct pppd_compat_pd *);
 static void write_radattr(struct pppd_compat_pd *, struct rad_packet_t *pack);
 #endif
@@ -167,7 +167,7 @@ static void ip_down_handler(struct sigchld_handler_t *h, int status)
 	triton_context_wakeup(pd->ses->ctrl->ctx);
 }
 
-#ifdef RADIUS
+#if 0
 static void ip_change_handler(struct sigchld_handler_t *h, int status)
 {
 	struct pppd_compat_pd *pd = container_of(h, typeof(*pd), hnd);
@@ -216,7 +216,7 @@ static void ev_ses_pre_up(struct ap_session *ses)
 	if (!pd)
 		return;
 
-#ifdef RADIUS
+#if 0
 	if (pd->tmp_fname) {
 		char fname[PATH_MAX];
 
@@ -414,7 +414,7 @@ static void ev_ses_finished(struct ap_session *ses)
 			pthread_mutex_unlock(&pd->ip_up_hnd.lock);
 	}
 
-#ifdef RADIUS
+#if 0
 	if (pd->radattr_saved)
 		remove_radattr(pd);
 #endif
@@ -423,7 +423,7 @@ static void ev_ses_finished(struct ap_session *ses)
 	_free(pd);
 }
 
-#ifdef RADIUS
+#if 0
 static void ev_radius_access_accept(struct ev_radius_t *ev)
 {
 	struct pppd_compat_pd *pd = find_pd(ev->ses);
@@ -821,7 +821,7 @@ static void init(void)
 	triton_event_register_handler(EV_SES_STARTED, (triton_event_func)ev_ses_started);
 	triton_event_register_handler(EV_SES_PRE_FINISHED, (triton_event_func)ev_ses_finished);
 	triton_event_register_handler(EV_CONFIG_RELOAD, (triton_event_func)load_config);
-#ifdef RADIUS
+#if 0
 	if (triton_module_loaded("radius")) {
 		triton_event_register_handler(EV_RADIUS_ACCESS_ACCEPT, (triton_event_func)ev_radius_access_accept);
 		triton_event_register_handler(EV_RADIUS_COA, (triton_event_func)ev_radius_coa);

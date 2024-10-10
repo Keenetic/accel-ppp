@@ -22,7 +22,7 @@
 #include "mempool.h"
 #include "cli.h"
 
-#ifdef RADIUS
+#if 0
 #include "radius.h"
 #endif
 
@@ -56,7 +56,7 @@ struct pppoe_conn_t {
 
 	struct ap_ctrl ctrl;
 	struct ppp_t ppp;
-#ifdef RADIUS
+#if 0
 	struct rad_plugin_t radius;
 #endif
 };
@@ -260,7 +260,7 @@ static void pppoe_conn_close(struct triton_context_t *ctx)
 		disconnect(conn);
 }
 
-#ifdef RADIUS
+#if 0
 static int pppoe_rad_send_access_request(struct rad_plugin_t *rad, struct rad_packet_t *pack)
 {
 	struct pppoe_conn_t *conn = container_of(rad, typeof(*conn), radius);
@@ -481,7 +481,7 @@ static void connect_channel(struct pppoe_conn_t *conn)
 	if (establish_ppp(&conn->ppp))
 		goto out_err_close;
 
-#ifdef RADIUS
+#if 0
 	if (conn->tr101 && triton_module_loaded("radius")) {
 		conn->radius.send_access_request = pppoe_rad_send_access_request;
 		conn->radius.send_accounting_request = pppoe_rad_send_accounting_request;

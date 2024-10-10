@@ -9,7 +9,7 @@ SET(sources
 )
 
 IF (RADIUS)
-SET(sources ${sources} tr101.c)
+#SET(sources ${sources} tr101.c)
 ENDIF(RADIUS)
 
 ADD_LIBRARY(pppoe SHARED ${sources})

@@ -14,7 +14,7 @@
 
 #include "ipdb.h"
 
-#ifdef RADIUS
+#if 0
 #include "radius.h"
 #endif
 
@@ -56,7 +56,7 @@ static struct ipdb_t ipdb;
 static in_addr_t conf_gw_ip_address;
 static int conf_shuffle;
 
-#ifdef RADIUS
+#if 0
 static int conf_vendor = 0;
 static int conf_attr = 88; // Framed-Pool
 #endif
@@ -481,7 +481,7 @@ static struct backup_module backup_mod = {
 };
 #endif
 
-#ifdef RADIUS
+#if 0
 static int parse_attr(struct ap_session *ses, struct rad_attr_t *attr)
 {
 	if (conf_vendor == 9) {
@@ -632,7 +632,7 @@ static void ippool_init2(void)
 	def_pool = create_pool(NULL);
 
 	list_for_each_entry(opt, &s->items, entry) {
-#ifdef RADIUS
+#if 0
 		if (triton_module_loaded("radius")) {
 			if (!strcmp(opt->name, "vendor")) {
 				conf_vendor = parse_vendor_opt(opt->val);
@@ -679,7 +679,7 @@ static void ippool_init2(void)
 	backup_register_module(&backup_mod);
 #endif
 
-#ifdef RADIUS
+#if 0
 	if (triton_module_loaded("radius"))
 		triton_event_register_handler(EV_RADIUS_ACCESS_ACCEPT, (triton_event_func)ev_radius_access_accept);
 #endif
